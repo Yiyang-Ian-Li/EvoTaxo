@@ -1,0 +1,38 @@
+Label: naloxone_discussion
+Dimension: taxonomy
+Description: None
+Level: 0
+Source: Initial
+----------------------------------------
+Children:
+     Label: policy_and_regulation
+     Dimension: taxonomy
+     Description: Analyses of laws, guidelines, and governmental initiatives that govern naloxone distribution, prescribing, and funding.
+     Level: 1
+     Source: Initial
+     ----------------------------------------
+     Label: clinical_use_and_outcomes
+     Dimension: taxonomy
+     Description: Research on dosage protocols, administration settings, efficacy, safety, and patient health outcomes following naloxone use.
+     Level: 1
+     Source: Initial
+     ----------------------------------------
+     Label: community_outreach_and_education
+     Dimension: taxonomy
+     Description: Studies and reports on public‑health campaigns, training programs, and community‑based naloxone distribution efforts.
+     Level: 1
+     Source: Initial
+     ----------------------------------------
+     Label: pharmacology_and_formulation
+     Dimension: taxonomy
+     Description: Investigations of naloxone’s chemical properties, delivery mechanisms (e.g., intranasal, auto‑injector), and emerging formulations.
+     Level: 1
+     Source: Initial
+     ----------------------------------------
+     Label: economic_impact_and_cost‑effectiveness
+     Dimension: taxonomy
+     Description: Evaluations of the financial implications, cost‑benefit analyses, and health‑system budgeting related to naloxone interventions.
+     Level: 1
+     Source: Initial
+     ----------------------------------------
+----------------------------------------

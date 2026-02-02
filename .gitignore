@@ -1,3 +1,12 @@
+# References
+claimspect-main/
+LLMTaxo-main/
+taxoadapt-main/
+# taxoadapt-copy/
+
+# Data files
+*.csv
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
