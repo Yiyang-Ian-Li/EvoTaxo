@@ -161,7 +161,7 @@ def promptCustomAPI(args, prompts, schema=None, max_new_tokens=1024, json_mode=T
 		}
 		
 		try:
-			response = requests.post(args.api_url, headers=headers, data=json.dumps(payload), timeout=60)
+			response = requests.post(args.api_url, headers=headers, data=json.dumps(payload), timeout=300)
 			response.raise_for_status()
 			result = response.json()
 			
@@ -177,7 +177,7 @@ def promptCustomAPI(args, prompts, schema=None, max_new_tokens=1024, json_mode=T
 				)
 				
 		except requests.exceptions.Timeout:
-			print(f"⚠ API call timeout (60s). Retrying with empty response...")
+			print(f"⚠ API call timeout (300s). Retrying with empty response...")
 			outputs.append('{}')
 		except requests.exceptions.RequestException as e:
 			print(f"⚠ API request failed: {e}")

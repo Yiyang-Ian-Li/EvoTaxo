@@ -5,13 +5,16 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "hdbscan>=0.8.41",
     "ipykernel>=7.1.0",
     "numpy>=2.4.2",
     "openai>=2.16.0",
     "pandas>=3.0.0",
+    "plotly>=6.5.2",
     "pydantic>=2.12.5",
     "requests>=2.32.5",
     "scikit-learn>=1.8.0",
+    "sentence-transformers>=5.2.2",
     "tqdm>=4.67.2",
     "typing-extensions>=4.15.0",
     "unidecode>=1.4.0",

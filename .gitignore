@@ -5,7 +5,8 @@ taxoadapt-main/
 # taxoadapt-copy/
 
 # Data files
-*.csv
+# *.csv
+*.html
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

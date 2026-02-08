@@ -1,0 +1,8 @@
+{
+    "total_prompt_tokens": 192048,
+    "total_completion_tokens": 72745,
+    "total_tokens": 264793,
+    "api_calls": 215,
+    "execution_time_seconds": 1635.4809567928314,
+    "execution_time_formatted": "0:27:15"
+}

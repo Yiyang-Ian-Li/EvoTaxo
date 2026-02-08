@@ -1,0 +1,158 @@
+Label: naloxone_discussion
+Dimension: taxonomy
+Description: None
+Level: 0
+Source: Initial
+# of Papers: 50
+Example Papers: [(45287, 'Comment in r/opiates'), (11986, 'Comment in r/Drugs'), (3028, 'Comment in r/fentanyl')]
+----------------------------------------
+Children:
+     Label: public_health_impact
+     Dimension: taxonomy
+     Description: Analyzes how naloxone distribution influences overdose mortality rates, emergency department visits, and overall community health outcomes.
+     Level: 1
+     Source: Initial
+     ----------------------------------------
+     Label: legal_and_policy_framework
+     Dimension: taxonomy
+     Description: Examines statutes, regulations, and policy initiatives governing naloxone prescribing, standing orders, and immunity protections for lay responders.
+     Level: 1
+     Source: Initial
+     # of Papers: 1
+     Example Papers: [(50922, 'Comment in r/opiates')]
+     ----------------------------------------
+     Label: clinical_use_and_administration
+     Dimension: taxonomy
+     Description: Focuses on medical guidelines, dosing protocols, routes of administration, and efficacy data for naloxone in opioid overdose reversal.
+     Level: 1
+     Source: Initial
+     ----------------------------------------
+     Label: community_education_and_outreach
+     Dimension: taxonomy
+     Description: Covers training programs, public awareness campaigns, and peer‑based initiatives that promote naloxone knowledge and utilization.
+     Level: 1
+     Source: Initial
+     ----------------------------------------
+     Label: supply_chain_and_accessibility
+     Dimension: taxonomy
+     Description: Investigates manufacturing, distribution logistics, cost barriers, and equitable access to naloxone across diverse populations.
+     Level: 1
+     Source: Initial
+     # of Papers: 2
+     Example Papers: [(22475, 'Narcan Availability Map/List, State by State - Most Up To Date I Could Find'), (38433, 'Comment in r/opiates')]
+     ----------------------------------------
+     Label: personal_narratives_and_experiences
+     Dimension: taxonomy
+     Description: Aggregates individual stories, testimonials, psychosocial factors, emotional responses, and peer‑support accounts related to naloxone use and overdose experiences.
+     Level: 1
+     Source: width
+     # of Papers: 27
+     Example Papers: [(3028, 'Comment in r/fentanyl'), (34983, 'Comment in r/opiates'), (59924, "Friend OD'd, using again days later, not sure what else to do.")]
+     ----------------------------------------
+     Children:
+          Label: firsthand_overdose_and_naloxone_rescue_narratives
+          Dimension: taxonomy
+          Description: Personal accounts describing the experience of an opioid overdose and the subsequent administration or effect of naloxone rescue.
+          Level: 2
+          Source: depth
+          # of Papers: 10
+          Example Papers: [(3028, 'Comment in r/fentanyl'), (34983, 'Comment in r/opiates'), (63260, 'Comment in r/OpiatesRecovery')]
+          ----------------------------------------
+          Label: emotional_and_psychosocial_responses_to_overdose
+          Dimension: taxonomy
+          Description: Narratives that focus on feelings such as anger, grief, or bereavement that follow an overdose event or naloxone reversal.
+          Level: 2
+          Source: depth
+          # of Papers: 6
+          Example Papers: [(1523, 'a word of caution..'), (19801, 'Comment in r/Drugs'), (63260, 'Comment in r/OpiatesRecovery')]
+          ----------------------------------------
+          Label: family_and_caregiver_perspectives_on_overdose
+          Dimension: taxonomy
+          Description: Stories from relatives or caregivers describing their experiences after a loved one's overdose and advice for prevention.
+          Level: 2
+          Source: depth
+          # of Papers: 2
+          Example Papers: [(59924, "Friend OD'd, using again days later, not sure what else to do."), (1523, 'a word of caution..')]
+          ----------------------------------------
+          Label: harm_reduction_and_substance_access_experiences
+          Dimension: taxonomy
+          Description: First‑person accounts related to obtaining, using, or navigating harm‑reduction supplies and non‑prescribed opioid treatments.
+          Level: 2
+          Source: depth
+          # of Papers: 11
+          Example Papers: [(29234, 'Comment in r/opiates'), (47898, 'Comment in r/opiates'), (30069, 'Comment in r/opiates')]
+          ----------------------------------------
+          Label: naloxone_knowledge_preparedness_and_medical_experiences
+          Dimension: taxonomy
+          Description: Personal reflections on naloxone preparedness, prescription processes, adverse reactions, misconceptions, and related medication experiences.
+          Level: 2
+          Source: depth
+          # of Papers: 6
+          Example Papers: [(34983, 'Comment in r/opiates'), (47898, 'Comment in r/opiates'), (57374, 'Comment in r/opiates')]
+          ----------------------------------------
+     ----------------------------------------
+     Label: online_discourse_and_misinformation
+     Dimension: taxonomy
+     Description: Covers discussions, peer‑support, user behavior, and the spread of myths or inaccurate information about naloxone within digital communities.
+     Level: 1
+     Source: width
+     # of Papers: 12
+     Example Papers: [(45287, 'Comment in r/opiates'), (11986, 'Comment in r/Drugs'), (31799, 'Comment in r/opiates')]
+     ----------------------------------------
+     Children:
+          Label: pharmacological_misconceptions_and_myths_taxonomy
+          Dimension: taxonomy
+          Description: Covers online claims and false beliefs about how naloxone works, its routes of administration, absorption, efficacy, and its alleged effects on opioid abuse or recreation.
+          Level: 2
+          Source: depth
+          # of Papers: 6
+          Example Papers: [(45287, 'Comment in r/opiates'), (45466, 'Comment in r/opiates'), (49267, 'Comment in r/opiates')]
+          ----------------------------------------
+          Label: access_and_harm_reduction_misinformation_taxonomy
+          Dimension: taxonomy
+          Description: Encompasses false or misleading online narratives that discourage naloxone access, misrepresent harm‑reduction resources, or promote avoidance strategies.
+          Level: 2
+          Source: depth
+          ----------------------------------------
+          Label: peer_support_and_harm_reduction_discourse_taxonomy
+          Dimension: taxonomy
+          Description: Focuses on community‑driven online support, advice, and resource sharing aimed at improving naloxone access and safe use within harm‑reduction contexts.
+          Level: 2
+          Source: depth
+          # of Papers: 4
+          Example Papers: [(31799, 'Comment in r/opiates'), (14966, 'Comment in r/Drugs'), (29234, 'Comment in r/opiates')]
+          ----------------------------------------
+          Label: opioid_interaction_and_naloxone_use_discussion_taxonomy
+          Dimension: taxonomy
+          Description: Addresses conversations that centre on the combined use of naloxone with opioids, including practical discussion of its role during opioid exposure.
+          Level: 2
+          Source: depth
+          # of Papers: 3
+          Example Papers: [(11986, 'Comment in r/Drugs'), (53146, 'Comment in r/opiates'), (45466, 'Comment in r/opiates')]
+          ----------------------------------------
+     ----------------------------------------
+     Label: pharmacology_and_safety
+     Dimension: taxonomy
+     Description: Focuses on the biochemical action, formulations, combination therapies, drug interactions, and safety/adverse‑reaction issues of naloxone.
+     Level: 1
+     Source: width
+     # of Papers: 5
+     Example Papers: [(10758, 'Comment in r/Drugs'), (13793, 'Comment in r/Drugs'), (6467, 'Is Narcan thermally stable?')]
+     ----------------------------------------
+     Label: post_overdose_care_and_intervention
+     Dimension: taxonomy
+     Description: Addresses immediate first‑aid measures, rescue techniques, and linkage to treatment or prevention services following an overdose event.
+     Level: 1
+     Source: width
+     # of Papers: 1
+     Example Papers: [(6329, 'If someone overdosed and is suffering from respiratory depression, would a bag valve mask/rescue breaths be able to keep them alive until ambulances arrive?')]
+     ----------------------------------------
+     Label: ethical_and_social_implications
+     Dimension: taxonomy
+     Description: Explores moral considerations, societal attitudes, and stigma surrounding naloxone distribution and use.
+     Level: 1
+     Source: width
+     # of Papers: 1
+     Example Papers: [(26994, 'Comment in r/opiates')]
+     ----------------------------------------
+----------------------------------------

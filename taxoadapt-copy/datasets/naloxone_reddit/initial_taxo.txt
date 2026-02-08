@@ -5,33 +5,33 @@ Level: 0
 Source: Initial
 ----------------------------------------
 Children:
-     Label: policy_and_regulation
+     Label: public_health_impact
      Dimension: taxonomy
-     Description: Analyses of laws, guidelines, and governmental initiatives that govern naloxone distribution, prescribing, and funding.
+     Description: Analyzes how naloxone distribution influences overdose mortality rates, emergency department visits, and overall community health outcomes.
      Level: 1
      Source: Initial
      ----------------------------------------
-     Label: clinical_use_and_outcomes
+     Label: legal_and_policy_framework
      Dimension: taxonomy
-     Description: Research on dosage protocols, administration settings, efficacy, safety, and patient health outcomes following naloxone use.
+     Description: Examines statutes, regulations, and policy initiatives governing naloxone prescribing, standing orders, and immunity protections for lay responders.
      Level: 1
      Source: Initial
      ----------------------------------------
-     Label: community_outreach_and_education
+     Label: clinical_use_and_administration
      Dimension: taxonomy
-     Description: Studies and reports on public‑health campaigns, training programs, and community‑based naloxone distribution efforts.
+     Description: Focuses on medical guidelines, dosing protocols, routes of administration, and efficacy data for naloxone in opioid overdose reversal.
      Level: 1
      Source: Initial
      ----------------------------------------
-     Label: pharmacology_and_formulation
+     Label: community_education_and_outreach
      Dimension: taxonomy
-     Description: Investigations of naloxone’s chemical properties, delivery mechanisms (e.g., intranasal, auto‑injector), and emerging formulations.
+     Description: Covers training programs, public awareness campaigns, and peer‑based initiatives that promote naloxone knowledge and utilization.
      Level: 1
      Source: Initial
      ----------------------------------------
-     Label: economic_impact_and_cost‑effectiveness
+     Label: supply_chain_and_accessibility
      Dimension: taxonomy
-     Description: Evaluations of the financial implications, cost‑benefit analyses, and health‑system budgeting related to naloxone interventions.
+     Description: Investigates manufacturing, distribution logistics, cost barriers, and equitable access to naloxone across diverse populations.
      Level: 1
      Source: Initial
      ----------------------------------------

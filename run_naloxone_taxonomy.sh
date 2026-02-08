@@ -16,11 +16,11 @@ python main.py \
     --topic "naloxone discussion" \
     --dataset "naloxone_reddit" \
     --csv_path "../naloxone_mentions.csv" \
-    --sample_size 3000 \
+    --sample_size 50 \
     --llm "custom" \
-    --max_depth 3 \
+    --max_depth 2 \
     --init_levels 1 \
-    --max_density 40
+    --max_density 5
 
 echo ""
 echo "=========================================="
