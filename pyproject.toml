@@ -17,6 +17,7 @@ dependencies = [
     "sentence-transformers>=5.2.2",
     "tqdm>=4.67.2",
     "typing-extensions>=4.15.0",
+    "umap-learn>=0.5.7",
     "unidecode>=1.4.0",
     "zstandard>=0.25.0",
 ]

@@ -1,5 +1,8 @@
+from claimtaxo.pipeline import main as pipeline_main
+
+
 def main():
-    print("Hello from claimtaxo!")
+    pipeline_main()
 
 
 if __name__ == "__main__":

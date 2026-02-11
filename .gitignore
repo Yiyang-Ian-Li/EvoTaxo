@@ -3,6 +3,7 @@ claimspect-main/
 LLMTaxo-main/
 taxoadapt-main/
 # taxoadapt-copy/
+claimtaxo_*/
 
 # Data files
 # *.csv

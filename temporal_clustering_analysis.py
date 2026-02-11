@@ -1,16 +1,20 @@
 """
 Temporal Clustering Analysis for Naloxone Mentions
-Uses UMAP + HDBSCAN with sentence-transformers embeddings
+Uses UMAP + multiple clustering algorithms (HDBSCAN vs KMeans)
 Generates interactive Plotly visualizations with quarterly aggregation
+Saves organized output in visualizations/ directory
 """
 
 import pandas as pd
 import numpy as np
+import os
 from datetime import datetime
 from sentence_transformers import SentenceTransformer
 import umap
 import hdbscan
 from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score, calinski_harabasz_score
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -18,7 +22,12 @@ from tqdm import tqdm
 import warnings
 warnings.filterwarnings('ignore')
 
-print("Loading data...")
+# Create output directory
+output_dir = 'visualizations'
+os.makedirs(output_dir, exist_ok=True)
+print(f"Output directory: {output_dir}/")
+
+print("\nLoading data...")
 # Load the dataset
 df = pd.read_csv('naloxone_mentions.csv')
 
@@ -72,16 +81,118 @@ umap_3d = umap.UMAP(
 )
 embeddings_3d = umap_3d.fit_transform(embeddings)
 
-print("\nApplying HDBSCAN clustering...")
-# Clustering on the full embedding space (not reduced) for better results
-clusterer = hdbscan.HDBSCAN(
-    min_cluster_size=25,
+print("\n" + "="*70)
+print("COMPARING CLUSTERING ALGORITHMS")
+print("="*70)
+
+# Method 1: HDBSCAN with strict parameters
+print("\n1. HDBSCAN (strict)...")
+hdbscan_strict = hdbscan.HDBSCAN(
+    min_cluster_size=50,
+    min_samples=10,
+    metric='euclidean',
+    cluster_selection_method='eom',
+    prediction_data=True
+)
+labels_strict = hdbscan_strict.fit_predict(embeddings)
+n_clusters_strict = len(set(labels_strict)) - (1 if -1 in labels_strict else 0)
+n_noise_strict = list(labels_strict).count(-1)
+noise_pct_strict = n_noise_strict / len(labels_strict) * 100
+print(f"   Clusters: {n_clusters_strict}, Noise: {noise_pct_strict:.1f}%")
+
+# Method 2: HDBSCAN with lenient parameters
+print("\n2. HDBSCAN (lenient)...")
+hdbscan_lenient = hdbscan.HDBSCAN(
+    min_cluster_size=15,
+    min_samples=3,
+    metric='euclidean',
+    cluster_selection_method='eom',
+    cluster_selection_epsilon=0.5,
+    prediction_data=True
+)
+labels_lenient = hdbscan_lenient.fit_predict(embeddings)
+n_clusters_lenient = len(set(labels_lenient)) - (1 if -1 in labels_lenient else 0)
+n_noise_lenient = list(labels_lenient).count(-1)
+noise_pct_lenient = n_noise_lenient / len(labels_lenient) * 100
+print(f"   Clusters: {n_clusters_lenient}, Noise: {noise_pct_lenient:.1f}%")
+
+# Method 3: HDBSCAN on UMAP embeddings (lower dimensional)
+print("\n3. HDBSCAN on UMAP 2D...")
+hdbscan_umap = hdbscan.HDBSCAN(
+    min_cluster_size=30,
     min_samples=5,
     metric='euclidean',
     cluster_selection_method='eom',
     prediction_data=True
 )
-cluster_labels = clusterer.fit_predict(embeddings)
+labels_umap = hdbscan_umap.fit_predict(embeddings_2d)
+n_clusters_umap = len(set(labels_umap)) - (1 if -1 in labels_umap else 0)
+n_noise_umap = list(labels_umap).count(-1)
+noise_pct_umap = n_noise_umap / len(labels_umap) * 100
+print(f"   Clusters: {n_clusters_umap}, Noise: {noise_pct_umap:.1f}%")
+
+# Method 4: KMeans with different k values
+print("\n4. KMeans (trying multiple k)...")
+best_k = None
+best_kmeans_score = -1
+best_kmeans_labels = None
+
+for k in [5, 7, 10, 12, 15]:
+    kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+    labels_k = kmeans.fit_predict(embeddings)
+    sil_k = silhouette_score(embeddings, labels_k)
+    print(f"   k={k:2d}: silhouette={sil_k:.3f}")
+    
+    if sil_k > best_kmeans_score:
+        best_kmeans_score = sil_k
+        best_k = k
+        best_kmeans_labels = labels_k
+
+print(f"   Best: k={best_k} with silhouette={best_kmeans_score:.3f}")
+
+# Calculate silhouette scores for HDBSCAN methods (excluding noise)
+sil_scores = {}
+for name, labels in [('strict', labels_strict), ('lenient', labels_lenient), ('umap', labels_umap)]:
+    non_noise_mask = labels >= 0
+    if non_noise_mask.sum() > 10 and len(set(labels[non_noise_mask])) > 1:
+        sil_scores[name] = silhouette_score(embeddings[non_noise_mask], labels[non_noise_mask])
+    else:
+        sil_scores[name] = -1
+
+# Selection logic
+print("\n" + "="*70)
+print("ALGORITHM SELECTION")
+print("="*70)
+
+methods = {
+    'HDBSCAN-strict': (labels_strict, n_clusters_strict, noise_pct_strict, sil_scores['strict']),
+    'HDBSCAN-lenient': (labels_lenient, n_clusters_lenient, noise_pct_lenient, sil_scores['lenient']),
+    'HDBSCAN-UMAP': (labels_umap, n_clusters_umap, noise_pct_umap, sil_scores['umap']),
+    f'KMeans-{best_k}': (best_kmeans_labels, best_k, 0, best_kmeans_score)
+}
+
+# Choose best method
+# Prefer methods with <75% noise and >3 clusters
+viable_methods = []
+for name, (labels, n_clust, noise_pct, sil) in methods.items():
+    if noise_pct < 75 and n_clust >= 3:
+        viable_methods.append((name, labels, n_clust, noise_pct, sil))
+
+if not viable_methods:
+    # Fall back to KMeans if all HDBSCAN have too much noise
+    print(f"✓ Using KMeans (k={best_k}) - all HDBSCAN methods have >75% noise")
+    cluster_labels = best_kmeans_labels
+    clustering_method = f'KMeans (k={best_k})'
+    selected_silhouette = best_kmeans_score
+else:
+    # Choose method with best silhouette score among viable options
+    viable_methods.sort(key=lambda x: x[4], reverse=True)
+    best_method = viable_methods[0]
+    clustering_method = best_method[0]
+    cluster_labels = best_method[1]
+    selected_silhouette = best_method[4]
+    print(f"✓ Using {clustering_method}")
+    print(f"  Clusters: {best_method[2]}, Noise: {best_method[3]:.1f}%, Silhouette: {best_method[4]:.3f}")
 
 # Add results to dataframe
 df_sample['cluster'] = cluster_labels
@@ -98,14 +209,29 @@ df_sample['time_numeric'] = ((df_sample['created_dt'] - min_date).dt.days / 91.2
 # Cluster statistics
 n_clusters = len(set(cluster_labels)) - (1 if -1 in cluster_labels else 0)
 n_noise = list(cluster_labels).count(-1)
-print(f"\nClustering Results:")
+noise_pct_final = n_noise/len(cluster_labels)*100
+
+print("\n" + "="*70)
+print(f"FINAL CLUSTERING: {clustering_method}")
+print("="*70)
 print(f"  Number of clusters: {n_clusters}")
-print(f"  Noise points: {n_noise} ({n_noise/len(cluster_labels)*100:.1f}%)")
+print(f"  Noise points: {n_noise} ({noise_pct_final:.1f}%)")
+print(f"  Silhouette score: {selected_silhouette:.3f}")
 
 # Create cluster labels (handle noise)
 df_sample['cluster_label'] = df_sample['cluster'].apply(
     lambda x: f'Cluster {x}' if x >= 0 else 'Noise'
 )
+
+# Cluster size distribution
+print("\nCluster size distribution:")
+for cid in sorted(df_sample['cluster'].unique()):
+    count = (df_sample['cluster'] == cid).sum()
+    pct = count / len(df_sample) * 100
+    if cid >= 0:
+        print(f"  Cluster {cid}: {count:4d} posts ({pct:5.1f}%)")
+    else:
+        print(f"  Noise:      {count:4d} posts ({pct:5.1f}%)")
 
 print("\n" + "="*60)
 print("VISUALIZATION 1: 2D UMAP Clustering by Quarter")
@@ -130,8 +256,9 @@ fig1 = px.scatter(
     height=700
 )
 fig1.update_traces(marker=dict(size=5, opacity=0.6))
-fig1.write_html('naloxone_clustering_2d.html')
-print("✓ Saved: naloxone_clustering_2d.html")
+output_path = os.path.join(output_dir, 'clustering_2d_by_cluster.html')
+fig1.write_html(output_path)
+print(f"✓ Saved: {output_path}")
 
 print("\n" + "="*60)
 print("VISUALIZATION 2: 2D UMAP by Time Period")
@@ -156,8 +283,9 @@ fig2 = px.scatter(
     height=700
 )
 fig2.update_traces(marker=dict(size=5, opacity=0.6))
-fig2.write_html('naloxone_clustering_2d_time.html')
-print("✓ Saved: naloxone_clustering_2d_time.html")
+output_path = os.path.join(output_dir, 'clustering_2d_by_time.html')
+fig2.write_html(output_path)
+print(f"✓ Saved: {output_path}")
 
 print("\n" + "="*60)
 print("VISUALIZATION 3: 3D Visualization with Time as Z-axis")
@@ -208,8 +336,9 @@ fig3.update_layout(
     width=1100,
     height=800
 )
-fig3.write_html('naloxone_clustering_3d_time.html')
-print("✓ Saved: naloxone_clustering_3d_time.html")
+output_path = os.path.join(output_dir, 'clustering_3d_time_axis.html')
+fig3.write_html(output_path)
+print(f"✓ Saved: {output_path}")
 
 print("\n" + "="*60)
 print("VISUALIZATION 4: 3D UMAP Visualization")
@@ -239,9 +368,9 @@ fig4 = px.scatter_3d(
     width=1100,
     height=800
 )
-fig4.update_traces(marker=dict(size=4, opacity=0.6))
-fig4.write_html('naloxone_clustering_3d_umap.html')
-print("✓ Saved: naloxone_clustering_3d_umap.html")
+output_path = os.path.join(output_dir, 'clustering_3d_umap.html')
+fig4.write_html(output_path)
+print(f"✓ Saved: {output_path}")
 
 print("\n" + "="*60)
 print("TEMPORAL CLUSTER ANALYSIS")
@@ -275,8 +404,9 @@ fig5.update_layout(
     height=600
 )
 fig5.update_xaxes(tickangle=45)
-fig5.write_html('naloxone_cluster_evolution.html')
-print("\n✓ Saved: naloxone_cluster_evolution.html")
+output_path = os.path.join(output_dir, 'cluster_evolution_timeline.html')
+fig5.write_html(output_path)
+print(f"\n✓ Saved: {output_path}")
 
 # Sample posts from each cluster
 print("\n" + "="*60)
@@ -294,13 +424,19 @@ for cluster_id in sorted(df_sample['cluster'].unique()):
             text_preview = row['text_clean'][:150].replace('\n', ' ')
             print(f"  {idx}. [{row['year_quarter']}] {text_preview}...")
 
-print("\n" + "="*60)
+print("\n" + "="*70)
 print("ANALYSIS COMPLETE!")
-print("="*60)
+print("="*70)
+print(f"\n✓ Method: {clustering_method}")
+print(f"✓ Clusters: {n_clusters}, Noise: {noise_pct_final:.1f}%")
+print(f"✓ Quality: Silhouette = {selected_silhouette:.3f}")
+print(f"\nAll visualizations saved to: {output_dir}/")
 print("\nGenerated files:")
-print("  1. naloxone_clustering_2d.html - 2D UMAP colored by cluster")
-print("  2. naloxone_clustering_2d_time.html - 2D UMAP colored by time")
-print("  3. naloxone_clustering_3d_time.html - 3D with time as Z-axis")
+print("  1. clustering_2d_by_cluster.html - 2D UMAP colored by cluster")
+print("  2. clustering_2d_by_time.html - 2D UMAP colored by time period")
+print("  3. clustering_3d_time_axis.html - 3D with time as Z-axis")
+print("  4. clustering_3d_umap.html - 3D UMAP visualization")
+print("  5. cluster_evolution_timelinee.html - 3D with time as Z-axis")
 print("  4. naloxone_clustering_3d_umap.html - 3D UMAP visualization")
 print("  5. naloxone_cluster_evolution.html - Cluster trends over time")
 print("\nOpen these HTML files in your browser to explore interactively!")
