@@ -1,119 +1,88 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Optional
 
 
 @dataclass
 class EmbeddingConfig:
+    # SentenceTransformer model used for post/node semantic embeddings.
     model_name: str = "all-mpnet-base-v2"
+    # Batch size for embedding inference.
     batch_size: int = 32
 
 
 @dataclass
-class ClusteringConfig:
-    umap_n_neighbors: int = 30
-    umap_min_dist: float = 0.1
-    umap_n_components: int = 5
-    k_min: int = 2
-    k_max: int = 12
-    k_step: int = 1
-    random_state: int = 42
-
-
-@dataclass
-class SliceConfig:
-    time_unit: str = "quarter"  # only "quarter" supported for now
-    timestamp_col: str = "created_dt"
-
-
-@dataclass
-class MappingConfig:
-    min_similarity: float = 0.35
-
-
-@dataclass
-class UnmappedConfig:
-    epsilon: float = 0.005
-    consecutive_rounds: int = 2
-    max_rounds: int = 5
-    min_unmapped: int = 30
-
-
-@dataclass
 class LLMConfig:
+    # Global on/off switch for all LLM calls.
     enabled: bool = True
+    # LLM provider backend.
+    provider: str = "custom"  # custom | openai
+    # Environment variable name used to fetch API key.
+    api_key_env: str = "OPENAI_API_KEY"
+    # Chat completion endpoint URL.
     api_url: str = "https://openwebui.crc.nd.edu/api/v1/chat/completions"
+    # Model name for selected provider.
     model: str = "gpt-oss:120b"
+    # HTTP timeout per LLM request (seconds).
     timeout_s: int = 60
-
-
-@dataclass
-class StanceConfig:
-    enabled: bool = True
-    sample_per_node: int = 20
-
-
-@dataclass
-class MergeConfig:
-    enabled: bool = True
-    similarity_threshold: float = 0.85
-    min_support: int = 8
-    support_ratio: float = 0.5
-    max_merges_per_slice: int = 20
-
-
-@dataclass
-class SplitConfig:
-    enabled: bool = False
-    min_support: int = 50
-    min_clusters: int = 2
-    max_clusters: int = 4
-    min_cluster_size: int = 10
-    silhouette_threshold: float = 0.2
-
-
-@dataclass
-class LifecycleConfig:
-    promote_min_slices: int = 2
-    promote_min_support: int = 20
-    stale_after_slices: int = 3
-
-
-@dataclass
-class LoggingConfig:
-    log_to_file: bool = True
-    file_name: str = "run.log"
-
-
-@dataclass
-class VisualizationConfig:
-    auto_generate: bool = True
-    output_subdir: str = "viz"
+    # Sampling temperature for LLM generation.
+    temperature: float = 0.0
+    # Retries for transport/non-200 failures.
+    max_retries: int = 2
+    # Backoff sleep between request retries (seconds).
+    retry_backoff_s: float = 1.0
+    # Retries for malformed/non-parseable JSON outputs.
+    max_parse_attempts: int = 4
+    # Trace verbosity for llm_trace.jsonl.
+    trace_mode: str = "compact"  # off | compact | full
+    # Max stored chars for prompt/response in compact trace mode.
+    trace_max_chars: int = 400
 
 
 @dataclass
 class PipelineConfig:
+    # Input CSV path.
     input_path: str = "naloxone_mentions.csv"
-    output_dir: str = "outputs"
-    text_col: str = "text"
+    # Output directory for all artifacts.
+    output_dir: str = "results_v2"
+    # Column names and filter for selecting working rows.
     kind_col: str = "kind"
     kind_value: str = "submissions"
     id_col: str = "id"
+    text_col: str = "text"
     title_col: Optional[str] = "title"
-    use_title_if_missing: bool = True
+    timestamp_col: str = "created_dt"
+    # Root topic string injected into LLM prompts.
+    root_topic: str = "naloxone"
+    # Drop rows before this year.
+    min_year: int = 2020
+    # Truncate post text to first N words.
+    max_post_words: int = 300
+
+    # Time window unit (MVP currently supports quarter only).
+    window_unit: str = "quarter"  # fixed by user request
+    # Diversity sample size for bootstrap taxonomy generation.
+    bootstrap_sample_size: int = 50
+    # Direct map threshold for post->claim cosine similarity.
+    high_sim_threshold: float = 0.9
+
+    # Cluster quality gates and HDBSCAN settings.
+    min_cluster_size_review: int = 4
+    min_cluster_size_hdbscan: int = 3
+    min_cohesion: float = 0.55
+    min_time_compactness: float = 0.6
+    # Temporal clustering distance weights.
+    temporal_w_sem: float = 0.8
+    temporal_w_time: float = 0.2
+    # Number of proposal samples shown to final-review LLM per cluster.
+    review_max_examples: int = 12
+    # Per-sample post text truncation for final-review prompt.
+    review_max_post_chars: int = 400
+
+    # Nested configs.
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
-    clustering: ClusteringConfig = field(default_factory=ClusteringConfig)
-    slicing: SliceConfig = field(default_factory=SliceConfig)
-    mapping: MappingConfig = field(default_factory=MappingConfig)
-    unmapped: UnmappedConfig = field(default_factory=UnmappedConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
-    stance: StanceConfig = field(default_factory=StanceConfig)
-    merge: MergeConfig = field(default_factory=MergeConfig)
-    split: SplitConfig = field(default_factory=SplitConfig)
-    lifecycle: LifecycleConfig = field(default_factory=LifecycleConfig)
-    logging: LoggingConfig = field(default_factory=LoggingConfig)
-    visualization: VisualizationConfig = field(default_factory=VisualizationConfig)
 
 
 DEFAULT_CONFIG = PipelineConfig()

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Iterable, List
+from typing import Iterable
 
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-from .config import EmbeddingConfig
+from config import EmbeddingConfig
 
 
 class Embedder:
