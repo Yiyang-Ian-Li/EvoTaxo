@@ -3,7 +3,7 @@ baselines/
 test_api.py
 
 # Data files
-# *.csv
+*.csv
 *.html
 *.sh
 
