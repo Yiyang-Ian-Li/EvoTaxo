@@ -1,7 +1,0 @@
-{
-  "dependencies": ["."],
-  "graphs": {
-    "agent": "./src/taxonomy_generator/graph.py:graph"
-  },
-  "env": ".env"
-}
