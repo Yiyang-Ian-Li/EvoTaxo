@@ -1,9 +1,5 @@
 # References
-claimspect-main/
-LLMTaxo-main/
-taxoadapt-main/
-# taxoadapt-copy/
-claimtaxo_*/
+baselines/
 test_api.py
 
 # Data files
