@@ -36,7 +36,8 @@ def apply_refined_actions(
             "post_ids": proposal_post_ids,
             "semantic_payload": sem,
         }
-        logger.info("Applying refined action type=%s objective=%s posts=%d", action_type, objective_node_id, len(proposal_post_ids))
+        if action_type != "skip_post":
+            logger.info("Applying refined action type=%s objective=%s posts=%d", action_type, objective_node_id, len(proposal_post_ids))
 
         if action_type == "set_node":
             if objective_node_id not in taxonomy.nodes:
@@ -113,12 +114,13 @@ def apply_refined_actions(
                 taxonomy_ops.append({**op_base, "op_type": "add_path", "op_result": "invalid_objective"})
                 event_log.append({**op_base, "event": "apply_refined_action_skipped", "reason": "invalid_objective"})
                 continue
-            if taxonomy.nodes[objective_node_id].level != "topic":
+            anchor_level = taxonomy.nodes[objective_node_id].level
+            if anchor_level not in {"root", "topic"}:
                 taxonomy_ops.append({**op_base, "op_type": "add_path", "op_result": "invalid_anchor_level"})
                 event_log.append({**op_base, "event": "apply_refined_action_skipped", "reason": "invalid_anchor_level"})
                 continue
             nodes = sem.get("nodes", [])
-            if not isinstance(nodes, list) or len(nodes) not in {1, 2}:
+            if not isinstance(nodes, list) or len(nodes) not in {2, 3}:
                 taxonomy_ops.append({**op_base, "op_type": "add_path", "op_result": "invalid_path_length"})
                 event_log.append({**op_base, "event": "apply_refined_action_skipped", "reason": "invalid_path_length"})
                 continue
@@ -127,7 +129,12 @@ def apply_refined_actions(
                 event_log.append({**op_base, "event": "apply_refined_action_skipped", "reason": "invalid_path_nodes"})
                 continue
             levels = [str(x.get("level", "")).strip().lower() for x in nodes]
-            if levels not in (["subtopic"], ["subtopic", "claim"]):
+            allowed_levels = (
+                (["topic", "subtopic"], anchor_level == "root"),
+                (["topic", "subtopic", "claim"], anchor_level == "root"),
+                (["subtopic", "claim"], anchor_level == "topic"),
+            )
+            if not any(levels == lv and ok for lv, ok in allowed_levels):
                 taxonomy_ops.append({**op_base, "op_type": "add_path", "op_result": "invalid_path_shape"})
                 event_log.append({**op_base, "event": "apply_refined_action_skipped", "reason": "invalid_path_shape"})
                 continue

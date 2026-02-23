@@ -16,54 +16,16 @@ def group_key(p: Dict[str, Any]) -> Tuple[str, str]:
 
 
 def semantic_text(p: Dict[str, Any]) -> str:
+    explanation = str(p.get("action_explanation", "")).strip()
+    summary = str(p.get("post_summary", "")).strip()
+    text = " ".join([x for x in [explanation, summary] if x])
+    if text:
+        return text
+    # Backward compatibility for older proposal files.
     sem = p.get("semantic_payload", {})
-    if not isinstance(sem, dict):
-        return ""
-    parts: List[str] = []
-    if p.get("action_type") == "add_path":
-        parts.append(str(p.get("objective_node_id", "")))
-        for item in sem.get("nodes", []) if isinstance(sem.get("nodes", []), list) else []:
-            if not isinstance(item, dict):
-                continue
-            parts.append(str(item.get("name", "")))
-            parts.append(str(item.get("level", "")))
-            cmb = item.get("cmb", {})
-            if isinstance(cmb, dict):
-                parts.extend(
-                    [
-                        str(cmb.get("definition", "")),
-                        " ".join([str(x) for x in cmb.get("include_terms", [])]),
-                        " ".join([str(x) for x in cmb.get("exclude_terms", [])]),
-                        " ".join([str(x) for x in cmb.get("examples", [])]),
-                    ]
-                )
-        return " ".join([x for x in parts if x.strip()])
-
-    if "child_name" in sem:
-        parts.append(str(sem.get("child_name", "")))
-    if "child_level" in sem:
-        parts.append(str(sem.get("child_level", "")))
-    cc = sem.get("child_cmb", {})
-    if isinstance(cc, dict):
-        parts.extend(
-            [
-                str(cc.get("definition", "")),
-                " ".join([str(x) for x in cc.get("include_terms", [])]),
-                " ".join([str(x) for x in cc.get("exclude_terms", [])]),
-                " ".join([str(x) for x in cc.get("examples", [])]),
-            ]
-        )
-    nc = sem.get("new_cmb", {})
-    if isinstance(nc, dict):
-        parts.extend(
-            [
-                str(nc.get("definition", "")),
-                " ".join([str(x) for x in nc.get("include_terms", [])]),
-                " ".join([str(x) for x in nc.get("exclude_terms", [])]),
-                " ".join([str(x) for x in nc.get("examples", [])]),
-            ]
-        )
-    return " ".join([p for p in parts if p.strip()])
+    if isinstance(sem, dict) and sem:
+        return str(sem)
+    return ""
 
 
 def _norm(v: np.ndarray) -> np.ndarray:

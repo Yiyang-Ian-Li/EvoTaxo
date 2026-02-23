@@ -12,10 +12,9 @@ Build a time-evolving claim taxonomy where:
 
 ## 2) Core Pipeline
 
-1. Bootstrap taxonomy
-- Diversity-sample `N=50` posts from the full corpus.
-- Ask LLM to generate initial taxonomy + CMB for each node.
-- Node structure is flexible (`topic/subtopic/claim`), but only `claim` nodes are directly mappable targets.
+1. Root-only initialization
+- Start with only the root node.
+- Root node name is set from configured `root_topic`.
 
 2. Chronological processing
 - Sort posts by timestamp and process sequentially.
@@ -26,7 +25,7 @@ Build a time-evolving claim taxonomy where:
 - Store proposals in persistent action backlog; do not mutate taxonomy here.
 
 3. End-of-window clustering
-- Window can be `month` or `quarter`.
+- Window can be `month`, `quarter`, or `year`.
 - For each `(action_type, objective_node_id)` group:
   - run semantic HDBSCAN (no time).
   - run temporal-aware HDBSCAN on distance:
@@ -39,7 +38,7 @@ Build a time-evolving claim taxonomy where:
 - Approved refined actions are converted into concrete taxonomy operations and applied.
 - Remove approved proposals from backlog; keep rejected/deferred/backlog residue.
 
-5. Finalization and projection
+4. Finalization and projection
 - After all windows, produce final taxonomy.
 - Build per-window taxonomy views from node-post grounding by timestamps (not operation replay).
 - Produce burst timeline from temporal clusters.
@@ -273,7 +272,6 @@ LLM output must be strict JSON:
 Under `claimtaxo/`:
 - `config.py`: thresholds + window/clustering settings.
 - `models.py`: dataclasses/pydantic models above.
-- `bootstrap.py`: diversity sample + initial taxonomy generation.
 - `mapping.py`: claim-node mapping and assignment logging.
 - `proposer.py`: per-post LLM action proposal generation.
 - `backlog.py`: persistence and state transitions for proposals.
@@ -290,13 +288,12 @@ Under `claimtaxo/`:
 
 ## Milestone 1 (build now)
 - Implement models + file schemas.
-- Implement bootstrap + chronological mapping.
+- Implement root-only initialization + chronological mapping.
 - Implement proposal generation + backlog persistence.
 - No clustering/apply yet.
 - Deliverables:
   - `action_proposals.jsonl`
   - `post_assignments.csv`
-  - `taxonomy_nodes_bootstrap.json`
 
 ## Milestone 2
 - Add semantic + temporal clustering modules.
@@ -317,4 +314,4 @@ Under `claimtaxo/`:
 - should stale proposals auto-expire after `K` windows?
 
 3. Window unit default:
-- month (more burst-sensitive) vs quarter (more stable).
+- month (more burst-sensitive) vs quarter (more stable) vs year (more coarse-grained).

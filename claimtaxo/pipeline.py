@@ -4,10 +4,12 @@ import argparse
 import dataclasses
 import logging
 import os
+from datetime import datetime
 
-from bootstrap import bootstrap_taxonomy
+from dotenv import load_dotenv
+
 from config import DEFAULT_CONFIG, PipelineConfig
-from data import diversity_sample, load_data
+from data import load_data
 from embeddings import Embedder
 from io_sinks import create_run_sinks
 from llm import LLMClient
@@ -33,6 +35,13 @@ def setup_logger(output_dir: str) -> logging.Logger:
     return logger
 
 
+def resolve_output_dir(raw_output: str) -> str:
+    out = (raw_output or "").strip() or "results"
+    norm = os.path.normpath(out)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return os.path.join(norm, stamp)
+
+
 def run_pipeline(cfg: PipelineConfig) -> None:
     ensure_dir(cfg.output_dir)
     logger = setup_logger(cfg.output_dir)
@@ -45,6 +54,14 @@ def run_pipeline(cfg: PipelineConfig) -> None:
     llm = LLMClient(cfg.llm)
     embedder = Embedder(cfg.embedding)
     taxonomy = Taxonomy()
+    # Root-only initialization.
+    if len(df):
+        first_window = str(df["window_id"].iloc[0])
+    else:
+        first_window = "INIT"
+    taxonomy.nodes[taxonomy.root_id].name = cfg.root_topic
+    taxonomy.nodes[taxonomy.root_id].created_at_window = first_window
+    taxonomy.nodes[taxonomy.root_id].updated_at_window = first_window
     sinks = create_run_sinks(cfg.output_dir)
 
     logger.info(
@@ -55,19 +72,12 @@ def run_pipeline(cfg: PipelineConfig) -> None:
         cfg.llm.model,
     )
 
-    logger.info("Bootstrap: diversity sample n=%d", cfg.bootstrap_sample_size)
-    bootstrap_df = diversity_sample(df, embedder, cfg.bootstrap_sample_size)
-    bootstrap_taxonomy(
-        taxonomy=taxonomy,
-        llm=llm,
-        sample_df=bootstrap_df,
-        cfg=cfg,
-        logger=logger,
-        event_log=sinks.event_log,
-        llm_trace=sinks.llm_trace,
+    logger.info(
+        "Root-only init: taxonomy root_id=%s root_name=%s window=%s",
+        taxonomy.root_id,
+        taxonomy.nodes[taxonomy.root_id].name,
+        first_window,
     )
-    write_json(os.path.join(cfg.output_dir, "taxonomy_nodes_bootstrap.json"), taxonomy.to_rows())
-    logger.info("Bootstrap complete. taxonomy_nodes=%d claim_nodes=%d", len(taxonomy.nodes), len(taxonomy.claim_node_ids()))
 
     loop = process_windows(
         cfg=cfg,
@@ -116,11 +126,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--input", default=DEFAULT_CONFIG.input_path)
     p.add_argument("--output", default=DEFAULT_CONFIG.output_dir)
     p.add_argument("--high-sim", type=float, default=DEFAULT_CONFIG.high_sim_threshold)
-    p.add_argument("--bootstrap-n", type=int, default=DEFAULT_CONFIG.bootstrap_sample_size)
-    p.add_argument("--llm-provider", default=DEFAULT_CONFIG.llm.provider, choices=["custom", "openai"])
+    p.add_argument("--min-year", type=int, default=DEFAULT_CONFIG.min_year)
+    p.add_argument("--llm-provider", default=DEFAULT_CONFIG.llm.provider, choices=["custom", "openai", "openrouter"])
     p.add_argument("--llm-model", default=DEFAULT_CONFIG.llm.model)
-    p.add_argument("--llm-api-url", default=DEFAULT_CONFIG.llm.api_url)
-    p.add_argument("--llm-api-key-env", default=DEFAULT_CONFIG.llm.api_key_env)
+    p.add_argument("--llm-api-url", default=None)
+    p.add_argument("--llm-api-key-env", default=None)
     p.add_argument("--llm-timeout-s", type=int, default=DEFAULT_CONFIG.llm.timeout_s)
     p.add_argument("--llm-max-retries", type=int, default=DEFAULT_CONFIG.llm.max_retries)
     p.add_argument("--llm-max-parse-attempts", type=int, default=DEFAULT_CONFIG.llm.max_parse_attempts)
@@ -128,23 +138,28 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--llm-trace-max-chars", type=int, default=DEFAULT_CONFIG.llm.trace_max_chars)
     p.add_argument("--review-max-examples", type=int, default=DEFAULT_CONFIG.review_max_examples)
     p.add_argument("--review-max-post-chars", type=int, default=DEFAULT_CONFIG.review_max_post_chars)
+    p.add_argument("--review-batch-every-n-posts", type=int, default=DEFAULT_CONFIG.review_batch_every_n_posts)
     p.add_argument("--disable-llm", action="store_true")
-    p.add_argument("--window", default=DEFAULT_CONFIG.window_unit, choices=["quarter"])
+    p.add_argument("--window", default=DEFAULT_CONFIG.window_unit, choices=["month", "quarter", "year"])
     p.add_argument("--root-topic", default=DEFAULT_CONFIG.root_topic)
     return p
 
 
 def main() -> None:
+    # Auto-load local .env into process environment (does not override existing env vars).
+    load_dotenv(override=False)
     args = build_parser().parse_args()
     cfg = DEFAULT_CONFIG
     cfg.input_path = args.input
-    cfg.output_dir = args.output
+    cfg.output_dir = resolve_output_dir(args.output)
     cfg.high_sim_threshold = args.high_sim
-    cfg.bootstrap_sample_size = args.bootstrap_n
+    cfg.min_year = args.min_year
     cfg.llm.provider = args.llm_provider
     cfg.llm.model = args.llm_model
-    cfg.llm.api_url = args.llm_api_url
-    cfg.llm.api_key_env = args.llm_api_key_env
+    if args.llm_api_url:
+        cfg.llm.api_url = args.llm_api_url
+    if args.llm_api_key_env:
+        cfg.llm.api_key_env = args.llm_api_key_env
     cfg.llm.timeout_s = args.llm_timeout_s
     cfg.llm.max_retries = args.llm_max_retries
     cfg.llm.max_parse_attempts = args.llm_max_parse_attempts
@@ -152,6 +167,7 @@ def main() -> None:
     cfg.llm.trace_max_chars = args.llm_trace_max_chars
     cfg.review_max_examples = args.review_max_examples
     cfg.review_max_post_chars = args.review_max_post_chars
+    cfg.review_batch_every_n_posts = args.review_batch_every_n_posts
     cfg.window_unit = args.window
     cfg.root_topic = args.root_topic
     if args.disable_llm:

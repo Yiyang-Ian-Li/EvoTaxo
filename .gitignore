@@ -1,8 +1,10 @@
 # References
 baselines/
+references/
 test_api.py
 
 # Data files
+results/
 *.csv
 *.html
 *.sh

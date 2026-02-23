@@ -13,6 +13,7 @@ from config import LLMConfig
 
 DEFAULT_CUSTOM_API_URL = "https://openwebui.crc.nd.edu/api/v1/chat/completions"
 DEFAULT_OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+DEFAULT_OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 
 class LLMClient:
@@ -27,10 +28,12 @@ class LLMClient:
                 self.api_key = os.getenv("OPENWEBUI_API_KEY") or os.getenv("OPENAI_API_KEY")
             elif self.provider == "openai":
                 self.api_key = os.getenv("OPENAI_API_KEY")
+            elif self.provider == "openrouter":
+                self.api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
         if self.api_key and any(ord(ch) >= 128 for ch in self.api_key):
             # Requests/http headers require latin-1 encodable values.
             self.api_key = None
-        if self.provider == "openai" and self.api_key:
+        if self.provider in {"openai", "openrouter"} and self.api_key:
             base_url = self._openai_base_url()
             self.openai_client = OpenAI(api_key=self.api_key, base_url=base_url)
 
@@ -39,8 +42,14 @@ class LLMClient:
         if url:
             if self.provider == "openai" and url == DEFAULT_CUSTOM_API_URL:
                 return DEFAULT_OPENAI_API_URL
+            if self.provider == "openrouter" and url == DEFAULT_CUSTOM_API_URL:
+                return DEFAULT_OPENROUTER_API_URL
             return url
-        return DEFAULT_OPENAI_API_URL if self.provider == "openai" else DEFAULT_CUSTOM_API_URL
+        if self.provider == "openai":
+            return DEFAULT_OPENAI_API_URL
+        if self.provider == "openrouter":
+            return DEFAULT_OPENROUTER_API_URL
+        return DEFAULT_CUSTOM_API_URL
 
     def _openai_base_url(self) -> str:
         url = self._api_url()
@@ -49,7 +58,7 @@ class LLMClient:
         return url
 
     def available(self) -> bool:
-        return self.cfg.enabled and self.provider in {"custom", "openai"} and bool(self.api_key)
+        return self.cfg.enabled and self.provider in {"custom", "openai", "openrouter"} and bool(self.api_key)
 
     def chat(
         self,
@@ -59,7 +68,7 @@ class LLMClient:
     ) -> Optional[str]:
         if not self.available():
             return None
-        if self.provider == "openai":
+        if self.provider in {"openai", "openrouter"}:
             return self._chat_openai(prompt, response_format, system_prompt)
         return self._chat_custom(prompt, response_format, system_prompt)
 

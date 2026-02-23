@@ -29,7 +29,7 @@ class Node:
 class Taxonomy:
     def __init__(self) -> None:
         self.nodes: Dict[str, Node] = {}
-        self.root_id = self._create_node("ROOT", "topic", None)
+        self.root_id = self._create_node("ROOT", "root", None)
 
     def _create_node(self, name: str, level: str, parent_id: Optional[str]) -> str:
         node_id = str(uuid.uuid4())
@@ -62,7 +62,12 @@ class Taxonomy:
 
     def node_text(self, node_id: str) -> str:
         n = self.nodes[node_id]
-        parts = [n.name, n.cmb.definition, " ".join(n.cmb.include_terms)]
+        parts = [
+            n.name,
+            n.cmb.definition,
+            " ".join(n.cmb.include_terms),
+            " ".join(n.cmb.examples),
+        ]
         return " ".join(p for p in parts if p)
 
     def find_child_by_name(self, parent_id: str, name: str) -> Optional[str]:
