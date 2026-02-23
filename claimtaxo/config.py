@@ -71,7 +71,7 @@ class PipelineConfig:
     min_cluster_size_review: int = 6
     min_cluster_size_hdbscan: int = 6
     min_cohesion: float = 0.6
-    min_time_compactness: float = 0.6
+    min_time_compactness: float = 0.2
     # Temporal clustering distance weights.
     temporal_w_sem: float = 0.5
     temporal_w_time: float = 0.5

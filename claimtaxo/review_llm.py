@@ -158,7 +158,7 @@ def review_final_action_pool(
         return []
     if not llm.available():
         return [
-            {"candidate_index": int(i), "refined_actions": list(c.get("refined_actions", []))[:1]}
+            {"candidate_index": int(i), "refined_actions": list(c.get("refined_actions", []))}
             for i, c in enumerate(candidates)
         ]
 
@@ -210,7 +210,7 @@ def review_final_action_pool(
     )
     if not payload:
         return [
-            {"candidate_index": int(i), "refined_actions": list(c.get("refined_actions", []))[:1]}
+            {"candidate_index": int(i), "refined_actions": list(c.get("refined_actions", []))}
             for i, c in enumerate(candidates)
         ]
 
@@ -233,14 +233,12 @@ def review_final_action_pool(
             if norm is not None:
                 refined.append(norm)
         if not refined:
-            refined = list(candidates[idx].get("refined_actions", []))[:1]
-        else:
-            refined = refined[:1]
+            refined = list(candidates[idx].get("refined_actions", []))
         selected.append({"candidate_index": idx, "refined_actions": refined})
 
     if not selected:
         return [
-            {"candidate_index": int(i), "refined_actions": list(c.get("refined_actions", []))[:1]}
+            {"candidate_index": int(i), "refined_actions": list(c.get("refined_actions", []))}
             for i, c in enumerate(candidates)
         ]
     return selected
@@ -255,9 +253,9 @@ def repair_final_action_candidate(
     invalid_reason: str,
     max_parse_attempts: int,
     trace: Optional[List[Dict[str, Any]]] = None,
-) -> Optional[Dict[str, Any]]:
+) -> List[Dict[str, Any]]:
     if not llm.available():
-        return None
+        return []
 
     records = candidate.get("records", []) if isinstance(candidate.get("records", []), list) else []
     examples = []
@@ -302,5 +300,17 @@ def repair_final_action_candidate(
         },
     )
     if not payload:
-        return None
-    return normalize_refined_action(payload.get("refined_action"))
+        return []
+
+    # Prefer plural key; keep singular for backward compatibility.
+    raw_actions = payload.get("refined_actions")
+    if not isinstance(raw_actions, list):
+        one = payload.get("refined_action")
+        raw_actions = [one] if one is not None else []
+
+    out: List[Dict[str, Any]] = []
+    for raw in raw_actions:
+        norm = normalize_refined_action(raw)
+        if norm is not None:
+            out.append(norm)
+    return out

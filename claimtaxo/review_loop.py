@@ -33,7 +33,7 @@ def is_high_quality(cluster_row: Dict[str, Any], cfg: PipelineConfig) -> bool:
     return True
 
 
-def _window_taxonomy_context(taxonomy: Taxonomy) -> Dict[str, Any]:
+def _proposal_taxonomy_context(taxonomy: Taxonomy) -> Dict[str, Any]:
     return {
         "root_id": taxonomy.root_id,
         "root_name": taxonomy.nodes[taxonomy.root_id].name if taxonomy.root_id in taxonomy.nodes else "ROOT",
@@ -46,12 +46,6 @@ def _window_taxonomy_context(taxonomy: Taxonomy) -> Dict[str, Any]:
                 "level": n.level,
                 "parent_id": n.parent_id,
                 "children": n.children,
-                "cmb": {
-                    "definition": n.cmb.definition,
-                    "include_terms": n.cmb.include_terms,
-                    "exclude_terms": n.cmb.exclude_terms,
-                    "examples": n.cmb.examples,
-                },
             }
             for n in sorted(taxonomy.nodes.values(), key=lambda x: (x.level, x.name, x.node_id))
         ],
@@ -94,7 +88,7 @@ def process_windows(
 
     claim_ids: List[str] = []
     claim_vecs = np.zeros((0, 1))
-    taxonomy_ctx_cached: Optional[Dict[str, Any]] = _window_taxonomy_context(taxonomy) if llm.available() else None
+    taxonomy_ctx_cached: Optional[Dict[str, Any]] = _proposal_taxonomy_context(taxonomy) if llm.available() else None
     taxonomy_dirty = True
 
     def _refresh_claim_cache() -> None:
@@ -105,7 +99,7 @@ def process_windows(
             claim_vecs = embedder.encode(claim_texts)
         else:
             claim_vecs = np.zeros((0, 1))
-        taxonomy_ctx_cached = _window_taxonomy_context(taxonomy) if llm.available() else None
+        taxonomy_ctx_cached = _proposal_taxonomy_context(taxonomy) if llm.available() else None
         taxonomy_dirty = False
 
     def _proposal_to_action(p: Dict[str, Any]) -> Dict[str, Any]:
@@ -225,6 +219,34 @@ def process_windows(
                     max_review_post_chars=cfg.review_max_post_chars,
                     trace=sinks.llm_trace,
                 )
+                # If approved but empty actions, ask LLM once more to regenerate.
+                if review["decision"] == "approve" and not review.get("refined_actions"):
+                    regen = review_action_cluster(
+                        llm=llm,
+                        taxonomy=taxonomy,
+                        root_topic=cfg.root_topic,
+                        window_id=str(c_payload.get("window_id", last_window_id)),
+                        cluster_record=c_payload,
+                        proposal_records=records,
+                        max_parse_attempts=cfg.llm.max_parse_attempts,
+                        max_review_examples=cfg.review_max_examples,
+                        max_review_post_chars=cfg.review_max_post_chars,
+                        trace=sinks.llm_trace,
+                    )
+                    sinks.event_log.append(
+                        {
+                            "ts": now_ts(),
+                            "event": "cluster_review_regen",
+                            "batch_id": batch_id,
+                            "window_id": last_window_id,
+                            "cluster_id": c["cluster_id"],
+                            "cluster_mode": c["cluster_mode"],
+                            "regen_decision": regen["decision"],
+                            "regen_refined_action_count": len(regen.get("refined_actions", [])),
+                        }
+                    )
+                    if regen["decision"] == "approve" and regen.get("refined_actions"):
+                        review = regen
                 sinks.cluster_reviews.append(
                     {
                         "ts": now_ts(),
@@ -265,7 +287,6 @@ def process_windows(
                     bursts.append(burst_row)
                     sinks.bursts.append(burst_row)
                 if review["decision"] == "approve" and review.get("refined_actions"):
-                    one_action = [review["refined_actions"][0]]
                     approved_candidates.append(
                         {
                             "cluster_id": c["cluster_id"],
@@ -276,7 +297,7 @@ def process_windows(
                             "quality": c.get("quality", {}),
                             "proposal_ids": pids,
                             "records": records,
-                            "refined_actions": one_action,
+                            "refined_actions": list(review.get("refined_actions", [])),
                         }
                     )
 
@@ -309,29 +330,47 @@ def process_windows(
                 )
                 continue
             refined_actions = item.get("refined_actions", cand["refined_actions"]) or []
-            refined_action = refined_actions[0] if refined_actions else None
-            ok = False
-            invalid_reason = "missing_refined_action"
-            if refined_action is not None:
-                ok, invalid_reason = validate_refined_action_executable(refined_action, taxonomy)
-
-            if not ok:
-                repaired = repair_final_action_candidate(
+            if not refined_actions:
+                refined_actions = repair_final_action_candidate(
                     llm=llm,
                     taxonomy=taxonomy,
                     root_topic=cfg.root_topic,
                     batch_id=batch_id,
                     candidate=cand,
-                    invalid_reason=invalid_reason,
+                    invalid_reason="missing_refined_actions",
                     max_parse_attempts=cfg.llm.max_parse_attempts,
                     trace=sinks.llm_trace,
                 )
-                if repaired is not None:
-                    ok, invalid_reason = validate_refined_action_executable(repaired, taxonomy)
-                    if ok:
-                        refined_action = repaired
 
-            if not ok or refined_action is None:
+            valid_actions: List[Dict[str, Any]] = []
+            invalid_reasons: List[str] = []
+            for ra in refined_actions:
+                ok, reason = validate_refined_action_executable(ra, taxonomy)
+                if ok:
+                    valid_actions.append(ra)
+                else:
+                    invalid_reasons.append(reason)
+
+            # If all invalid, ask LLM once more to regenerate a valid action set.
+            if not valid_actions:
+                repaired_actions = repair_final_action_candidate(
+                    llm=llm,
+                    taxonomy=taxonomy,
+                    root_topic=cfg.root_topic,
+                    batch_id=batch_id,
+                    candidate=cand,
+                    invalid_reason=invalid_reasons[0] if invalid_reasons else "all_invalid_refined_actions",
+                    max_parse_attempts=cfg.llm.max_parse_attempts,
+                    trace=sinks.llm_trace,
+                )
+                for ra in repaired_actions:
+                    ok, reason = validate_refined_action_executable(ra, taxonomy)
+                    if ok:
+                        valid_actions.append(ra)
+                    else:
+                        invalid_reasons.append(reason)
+
+            if not valid_actions:
                 sinks.event_log.append(
                     {
                         "ts": now_ts(),
@@ -339,16 +378,29 @@ def process_windows(
                         "batch_id": batch_id,
                         "cluster_id": cand["cluster_id"],
                         "proposal_ids": pids,
-                        "invalid_reason": invalid_reason,
+                        "invalid_reason": invalid_reasons[0] if invalid_reasons else "missing_refined_actions",
                     }
                 )
                 for pid in pids:
                     proposal_map[pid]["status"] = "pending"
                 continue
 
+            if invalid_reasons:
+                sinks.event_log.append(
+                    {
+                        "ts": now_ts(),
+                        "event": "final_action_partially_invalid_dropped",
+                        "batch_id": batch_id,
+                        "cluster_id": cand["cluster_id"],
+                        "proposal_ids": pids,
+                        "invalid_reason": invalid_reasons[0],
+                        "valid_action_count": len(valid_actions),
+                    }
+                )
+
             apply_refined_actions(
                 taxonomy=taxonomy,
-                refined_actions=[refined_action],
+                refined_actions=valid_actions,
                 cluster_proposals=[proposal_map[pid] for pid in pids],
                 window_id=str(cand.get("window_id", last_window_id)),
                 taxonomy_ops=sinks.taxonomy_ops,

@@ -138,7 +138,7 @@ def build_final_review_prompt(
         "- Prefer conservative edits and existing-node reuse.\\n"
         "Rules:\\n"
         "- candidate_index must refer to provided candidates.\\n"
-        "- refined_actions must follow allowed schema and contain exactly 1 action.\\n"
+        "- refined_actions must follow allowed schema and contain one or more actions.\\n"
         "- Keep final actions non-overlapping.\\n"
         "- If candidates are near-duplicates, keep one.\\n"
         f"Root topic: {json.dumps(root_topic, ensure_ascii=False)}\\n"
@@ -156,9 +156,9 @@ def build_repair_prompt(
     taxonomy_ctx: Dict[str, Any],
 ) -> str:
     return (
-        "The previous refined action is invalid and cannot be applied. Return one corrected refined action.\\n"
-        "Return strict JSON with key: refined_action\\n"
-        'Format: {"refined_action": {...}}\\n'
+        "The previous refined actions are invalid or empty and cannot be applied. Return corrected refined actions.\\n"
+        "Return strict JSON with key: refined_actions\\n"
+        'Format: {"refined_actions":[{...}, ...]}\\n'
         "Action schema options:\\n"
         '- set_node: {"action_type":"set_node","objective_node_id":"<existing_node_id>","semantic_payload":{}}\\n'
         '- skip_post: {"action_type":"skip_post","objective_node_id":null,"semantic_payload":{}}\\n'
@@ -169,7 +169,7 @@ def build_repair_prompt(
         "Rules:\\n"
         "- objective_node_id must reference an existing node (except skip_post).\\n"
         "- add_path shapes must be: root->topic->subtopic OR root->topic->subtopic->claim OR topic->subtopic->claim.\\n"
-        "- Return exactly one action.\\n"
+        "- Return one or more actions.\\n"
         f"Root topic: {json.dumps(root_topic, ensure_ascii=False)}\\n"
         f"Batch: {batch_id}\\n"
         f"Invalid reason: {invalid_reason}\\n"
