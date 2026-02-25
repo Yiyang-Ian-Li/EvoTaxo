@@ -66,7 +66,7 @@ class PipelineConfig:
     high_sim_threshold: float = 0.7
 
     # Cluster quality gates and HDBSCAN settings.
-    min_cluster_size_review: int = 3
+    min_cluster_size_review: int = 10
     min_cluster_size_hdbscan: int = 3
     min_cohesion: float = 0.5
     min_time_compactness: float = 0.2

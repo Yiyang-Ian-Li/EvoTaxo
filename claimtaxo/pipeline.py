@@ -47,6 +47,7 @@ def run_pipeline(cfg: PipelineConfig) -> None:
     logger = setup_logger(cfg.output_dir)
     logger.info("Starting ClaimTaxo pipeline")
     logger.info("Input=%s Output=%s RootTopic=%s", cfg.input_path, cfg.output_dir, cfg.root_topic)
+    write_json(os.path.join(cfg.output_dir, "config.json"), dataclasses.asdict(cfg))
 
     df = load_data(cfg)
     logger.info("Loaded posts=%d (filtered kind=%s)", len(df), cfg.kind_value)
@@ -63,17 +64,6 @@ def run_pipeline(cfg: PipelineConfig) -> None:
     taxonomy.nodes[taxonomy.root_id].created_at_window = first_window
     taxonomy.nodes[taxonomy.root_id].updated_at_window = first_window
     sinks = create_run_sinks(cfg.output_dir)
-    sinks.taxonomy_updates.append(
-        {
-            "ts": now_ts(),
-            "window_id": first_window,
-            "trigger": "root_init",
-            "action_type": "init",
-            "objective_node_id": taxonomy.root_id,
-            "post_ids": [],
-            "taxonomy_nodes": taxonomy.to_rows(),
-        }
-    )
 
     logger.info(
         "LLM enabled=%s available=%s provider=%s model=%s",
@@ -111,7 +101,6 @@ def run_pipeline(cfg: PipelineConfig) -> None:
         os.path.join(cfg.output_dir, "run_meta.json"),
         {
             "generated_at": now_ts(),
-            "config": dataclasses.asdict(cfg),
             "counts": {
                 "nodes": len(taxonomy.nodes),
                 "assignments": sinks.assignment.count,

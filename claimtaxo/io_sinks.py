@@ -51,7 +51,7 @@ class RunSinks:
     action_proposals: JsonlSink
     clusters_overview: JsonlSink
     cluster_decisions: JsonlSink
-    taxonomy_updates: JsonlSink
+    taxonomy_after_clustering: JsonlSink
 
 
 def create_run_sinks(output_dir: str) -> RunSinks:
@@ -60,5 +60,5 @@ def create_run_sinks(output_dir: str) -> RunSinks:
         action_proposals=JsonlSink(os.path.join(output_dir, "action_proposals.jsonl")),
         clusters_overview=JsonlSink(os.path.join(output_dir, "clusters_overview.jsonl")),
         cluster_decisions=JsonlSink(os.path.join(output_dir, "cluster_decisions.jsonl")),
-        taxonomy_updates=JsonlSink(os.path.join(output_dir, "taxonomy_updates.jsonl")),
+        taxonomy_after_clustering=JsonlSink(os.path.join(output_dir, "taxonomy_after_clustering.jsonl")),
     )

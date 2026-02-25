@@ -58,6 +58,80 @@ def _proposal_taxonomy_context(taxonomy: Taxonomy) -> Dict[str, Any]:
     }
 
 
+def _node_path_names(taxonomy: Taxonomy, node_id: Optional[str]) -> List[str]:
+    if not node_id or node_id not in taxonomy.nodes:
+        return []
+    out: List[str] = []
+    cur: Optional[str] = node_id
+    while cur is not None and cur in taxonomy.nodes:
+        n = taxonomy.nodes[cur]
+        out.append(n.name)
+        cur = n.parent_id
+    out.reverse()
+    return out
+
+
+def _format_refined_actions_readable(taxonomy: Taxonomy, actions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for a in actions:
+        if not isinstance(a, dict):
+            continue
+        action_type = str(a.get("action_type", "")).strip()
+        target = _node_path_names(taxonomy, a.get("objective_node_id"))
+        sem = a.get("semantic_payload", {}) if isinstance(a.get("semantic_payload", {}), dict) else {}
+        row: Dict[str, Any] = {"action_type": action_type, "target_path": target}
+        if action_type == "add_child":
+            row["child_name"] = str(sem.get("child_name", "")).strip()
+            row["child_level"] = str(sem.get("child_level", "")).strip()
+        elif action_type == "add_path":
+            nodes = sem.get("nodes", []) if isinstance(sem.get("nodes", []), list) else []
+            row["path_nodes"] = [
+                {"name": str(x.get("name", "")).strip(), "level": str(x.get("level", "")).strip()}
+                for x in nodes
+                if isinstance(x, dict)
+            ]
+        elif action_type == "update_cmb":
+            new_cmb = sem.get("new_cmb", {}) if isinstance(sem.get("new_cmb", {}), dict) else {}
+            row["new_definition"] = str(new_cmb.get("definition", "")).strip()
+        out.append(row)
+    return out
+
+
+def _taxonomy_nested_snapshot(taxonomy: Taxonomy) -> Dict[str, Any]:
+    root = taxonomy.nodes[taxonomy.root_id]
+    topics: List[Dict[str, Any]] = []
+    topic_ids = [cid for cid in root.children if cid in taxonomy.nodes and taxonomy.nodes[cid].level == "topic"]
+    for tid in sorted(topic_ids, key=lambda x: (taxonomy.nodes[x].name.lower(), x)):
+        t = taxonomy.nodes[tid]
+        topic_row: Dict[str, Any] = {
+            "name": t.name,
+            "definition": t.cmb.definition,
+            "subtopics": [],
+            "claims": [],
+        }
+        subtopic_ids = [cid for cid in t.children if cid in taxonomy.nodes and taxonomy.nodes[cid].level == "subtopic"]
+        for sid in sorted(subtopic_ids, key=lambda x: (taxonomy.nodes[x].name.lower(), x)):
+            s = taxonomy.nodes[sid]
+            claim_ids = [cid for cid in s.children if cid in taxonomy.nodes and taxonomy.nodes[cid].level == "claim"]
+            topic_row["subtopics"].append(
+                {
+                    "name": s.name,
+                    "definition": s.cmb.definition,
+                    "claims": [
+                        {"name": taxonomy.nodes[cid].name, "definition": taxonomy.nodes[cid].cmb.definition}
+                        for cid in sorted(claim_ids, key=lambda x: (taxonomy.nodes[x].name.lower(), x))
+                    ],
+                }
+            )
+        direct_claim_ids = [cid for cid in t.children if cid in taxonomy.nodes and taxonomy.nodes[cid].level == "claim"]
+        topic_row["claims"] = [
+            {"name": taxonomy.nodes[cid].name, "definition": taxonomy.nodes[cid].cmb.definition}
+            for cid in sorted(direct_claim_ids, key=lambda x: (taxonomy.nodes[x].name.lower(), x))
+        ]
+        topics.append(topic_row)
+    return {"root": {"name": root.name, "topics": topics}}
+
+
 @dataclass
 class WindowLoopResult:
     action_proposals: List[Dict[str, Any]]
@@ -138,7 +212,7 @@ def process_windows(
                 assignment_rows=sinks.assignment,
                 node_post_links=node_post_links,
                 logger=logger,
-                taxonomy_updates=sinks.taxonomy_updates,
+                taxonomy_updates=None,
             )
             applied_direct_ids.add(str(rec["proposal_id"]))
             proposal_map[str(rec["proposal_id"])]["status"] = "applied"
@@ -188,21 +262,42 @@ def process_windows(
                             "post_summary": str(rec.get("post_summary", ""))[:240],
                         }
                     )
+                overview_debug_row = {
+                    "ts": now_ts(),
+                    "batch_id": batch_id,
+                    "window_id": str(c.get("window_id", last_window_id)),
+                    "cluster_id": c["cluster_id"],
+                    "cluster_mode": c["cluster_mode"],
+                    "action_type": c.get("action_type"),
+                    "objective_node_id": c.get("objective_node_id"),
+                    "size": int(c.get("size", 0)),
+                    "quality": c.get("quality", {}),
+                    "is_high_quality": bool(c.get("is_high_quality", False)),
+                    "proposal_ids": pids_for_examples,
+                    "centroid_proposal_ids": list(c.get("centroid_proposal_ids", [])),
+                    "examples": examples,
+                }
                 sinks.clusters_overview.append(
                     {
-                        "ts": now_ts(),
+                        "ts": overview_debug_row["ts"],
                         "batch_id": batch_id,
                         "window_id": str(c.get("window_id", last_window_id)),
-                        "cluster_id": c["cluster_id"],
                         "cluster_mode": c["cluster_mode"],
                         "action_type": c.get("action_type"),
-                        "objective_node_id": c.get("objective_node_id"),
+                        "objective_node_path": _node_path_names(taxonomy, c.get("objective_node_id")),
                         "size": int(c.get("size", 0)),
                         "quality": c.get("quality", {}),
                         "is_high_quality": bool(c.get("is_high_quality", False)),
-                        "proposal_ids": pids_for_examples,
-                        "centroid_proposal_ids": list(c.get("centroid_proposal_ids", [])),
-                        "examples": examples,
+                        "proposal_count": len(pids_for_examples),
+                        "samples": [
+                            {
+                                "post_id": x.get("post_id"),
+                                "action_type": x.get("action_type"),
+                                "action_explanation": x.get("action_explanation", ""),
+                                "post_summary": x.get("post_summary", ""),
+                            }
+                            for x in examples
+                        ],
                     }
                 )
 
@@ -240,18 +335,31 @@ def process_windows(
                         model_override=cfg.llm.later_stage_model,
                     )
 
+                decision_debug_row = {
+                    "ts": now_ts(),
+                    "stage": "cluster_review",
+                    "batch_id": batch_id,
+                    "window_id": str(c.get("window_id", last_window_id)),
+                    "cluster_id": c["cluster_id"],
+                    "cluster_mode": c["cluster_mode"],
+                    "decision": review["decision"],
+                    "reason": review.get("reason", ""),
+                    "proposal_ids": pids,
+                    "review_refined_actions": review.get("refined_actions", []),
+                }
                 sinks.cluster_decisions.append(
                     {
-                        "ts": now_ts(),
+                        "ts": decision_debug_row["ts"],
                         "stage": "cluster_review",
                         "batch_id": batch_id,
                         "window_id": str(c.get("window_id", last_window_id)),
-                        "cluster_id": c["cluster_id"],
                         "cluster_mode": c["cluster_mode"],
+                        "action_type": c.get("action_type"),
+                        "objective_node_path": _node_path_names(taxonomy, c.get("objective_node_id")),
                         "decision": review["decision"],
                         "reason": review.get("reason", ""),
-                        "proposal_ids": pids,
-                        "review_refined_actions": review.get("refined_actions", []),
+                        "proposal_count": len(pids),
+                        "review_refined_actions": _format_refined_actions_readable(taxonomy, review.get("refined_actions", [])),
                     }
                 )
                 if review["decision"] == "approve" and review.get("refined_actions"):
@@ -289,18 +397,32 @@ def process_windows(
             if not pids:
                 continue
             if any(pid in consumed for pid in pids):
+                decision_debug_row = {
+                    "ts": now_ts(),
+                    "stage": "final_arbitration",
+                    "batch_id": batch_id,
+                    "window_id": str(cand.get("window_id", last_window_id)),
+                    "cluster_id": cand["cluster_id"],
+                    "cluster_mode": cand["cluster_mode"],
+                    "decision": "defer",
+                    "final_status": "conflict_skip",
+                    "reason": "proposal_ids_already_consumed",
+                    "proposal_ids": pids,
+                    "final_actions": [],
+                }
                 sinks.cluster_decisions.append(
                     {
-                        "ts": now_ts(),
+                        "ts": decision_debug_row["ts"],
                         "stage": "final_arbitration",
                         "batch_id": batch_id,
                         "window_id": str(cand.get("window_id", last_window_id)),
-                        "cluster_id": cand["cluster_id"],
                         "cluster_mode": cand["cluster_mode"],
+                        "action_type": cand.get("action_type"),
+                        "objective_node_path": _node_path_names(taxonomy, cand.get("objective_node_id")),
                         "decision": "defer",
                         "final_status": "conflict_skip",
                         "reason": "proposal_ids_already_consumed",
-                        "proposal_ids": pids,
+                        "proposal_count": len(pids),
                         "final_actions": [],
                     }
                 )
@@ -349,18 +471,32 @@ def process_windows(
             if not valid_actions:
                 for pid in pids:
                     proposal_map[pid]["status"] = "pending"
+                decision_debug_row = {
+                    "ts": now_ts(),
+                    "stage": "final_arbitration",
+                    "batch_id": batch_id,
+                    "window_id": str(cand.get("window_id", last_window_id)),
+                    "cluster_id": cand["cluster_id"],
+                    "cluster_mode": cand["cluster_mode"],
+                    "decision": "defer",
+                    "final_status": "invalid_deferred",
+                    "reason": invalid_reasons[0] if invalid_reasons else "missing_refined_actions",
+                    "proposal_ids": pids,
+                    "final_actions": [],
+                }
                 sinks.cluster_decisions.append(
                     {
-                        "ts": now_ts(),
+                        "ts": decision_debug_row["ts"],
                         "stage": "final_arbitration",
                         "batch_id": batch_id,
                         "window_id": str(cand.get("window_id", last_window_id)),
-                        "cluster_id": cand["cluster_id"],
                         "cluster_mode": cand["cluster_mode"],
+                        "action_type": cand.get("action_type"),
+                        "objective_node_path": _node_path_names(taxonomy, cand.get("objective_node_id")),
                         "decision": "defer",
                         "final_status": "invalid_deferred",
                         "reason": invalid_reasons[0] if invalid_reasons else "missing_refined_actions",
-                        "proposal_ids": pids,
+                        "proposal_count": len(pids),
                         "final_actions": [],
                     }
                 )
@@ -375,25 +511,39 @@ def process_windows(
                 assignment_rows=sinks.assignment,
                 node_post_links=node_post_links,
                 logger=logger,
-                taxonomy_updates=sinks.taxonomy_updates,
+                taxonomy_updates=None,
             )
             for pid in pids:
                 consumed.add(pid)
                 applied_ids.add(pid)
                 proposal_map[pid]["status"] = "applied"
+            decision_debug_row = {
+                "ts": now_ts(),
+                "stage": "final_arbitration",
+                "batch_id": batch_id,
+                "window_id": str(cand.get("window_id", last_window_id)),
+                "cluster_id": cand["cluster_id"],
+                "cluster_mode": cand["cluster_mode"],
+                "decision": "approve",
+                "final_status": "applied",
+                "reason": "",
+                "proposal_ids": pids,
+                "final_actions": valid_actions,
+            }
             sinks.cluster_decisions.append(
                 {
-                    "ts": now_ts(),
+                    "ts": decision_debug_row["ts"],
                     "stage": "final_arbitration",
                     "batch_id": batch_id,
                     "window_id": str(cand.get("window_id", last_window_id)),
-                    "cluster_id": cand["cluster_id"],
                     "cluster_mode": cand["cluster_mode"],
+                    "action_type": cand.get("action_type"),
+                    "objective_node_path": _node_path_names(taxonomy, cand.get("objective_node_id")),
                     "decision": "approve",
                     "final_status": "applied",
                     "reason": "",
-                    "proposal_ids": pids,
-                    "final_actions": valid_actions,
+                    "proposal_count": len(pids),
+                    "final_actions": _format_refined_actions_readable(taxonomy, valid_actions),
                 }
             )
             resolved_cluster_ids.add(cand["cluster_id"])
@@ -405,18 +555,32 @@ def process_windows(
             pids = [pid for pid in cand["proposal_ids"] if pid in pending_ids]
             if not pids:
                 continue
+            decision_debug_row = {
+                "ts": now_ts(),
+                "stage": "final_arbitration",
+                "batch_id": batch_id,
+                "window_id": str(cand.get("window_id", last_window_id)),
+                "cluster_id": cid,
+                "cluster_mode": cand.get("cluster_mode"),
+                "decision": "defer",
+                "final_status": "not_selected_in_pool",
+                "reason": "not_selected_by_final_pool",
+                "proposal_ids": pids,
+                "final_actions": [],
+            }
             sinks.cluster_decisions.append(
                 {
-                    "ts": now_ts(),
+                    "ts": decision_debug_row["ts"],
                     "stage": "final_arbitration",
                     "batch_id": batch_id,
                     "window_id": str(cand.get("window_id", last_window_id)),
-                    "cluster_id": cid,
                     "cluster_mode": cand.get("cluster_mode"),
+                    "action_type": cand.get("action_type"),
+                    "objective_node_path": _node_path_names(taxonomy, cand.get("objective_node_id")),
                     "decision": "defer",
                     "final_status": "not_selected_in_pool",
                     "reason": "not_selected_by_final_pool",
-                    "proposal_ids": pids,
+                    "proposal_count": len(pids),
                     "final_actions": [],
                 }
             )
@@ -425,6 +589,14 @@ def process_windows(
             pending_ids.discard(pid)
         if applied_ids:
             taxonomy_dirty = True
+        sinks.taxonomy_after_clustering.append(
+            {
+                "ts": now_ts(),
+                "batch_id": batch_id,
+                "window_id": last_window_id,
+                "taxonomy": _taxonomy_nested_snapshot(taxonomy),
+            }
+        )
 
     if taxonomy_dirty:
         _refresh_claim_cache()
@@ -538,7 +710,7 @@ def process_windows(
                     assignment_rows=sinks.assignment,
                     node_post_links=node_post_links,
                     logger=logger,
-                    taxonomy_updates=sinks.taxonomy_updates,
+                    taxonomy_updates=None,
                     log_set_node=False,
                 )
                 record["status"] = "applied" if set_node_valid else "rejected"
