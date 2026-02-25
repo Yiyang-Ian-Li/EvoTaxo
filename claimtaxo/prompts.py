@@ -99,7 +99,6 @@ def build_propose_post_prompt(
 
 def build_review_cluster_prompt(
     root_topic: str,
-    window_id: str,
     cluster_brief: Dict[str, Any],
     sampled: Any,
     taxonomy_ctx: Dict[str, Any],
@@ -119,7 +118,6 @@ def build_review_cluster_prompt(
         "\\n"
         "Context:\\n"
         f"Root topic: {json.dumps(root_topic, ensure_ascii=False)}\\n"
-        f"Window: {window_id}\\n"
         "Root node has level='root'.\\n"
         f"Current taxonomy context (full):\\n{json.dumps(taxonomy_ctx, ensure_ascii=False)}\\n"
         f"Cluster summary:\\n{json.dumps(cluster_brief, ensure_ascii=False)}\\n"
@@ -165,7 +163,7 @@ def build_final_review_prompt(
         "You are the final-review arbitration stage of taxonomy maintenance.\\n"
         "Responsibility:\\n"
         "- Review all cluster-approved candidates and decide which candidate actions to apply now.\\n"
-        "- Resolve overlaps/conflicts and return a coherent final set.\\n"
+        "- Resolve overlaps/conflicts and return a coherent high-quality final set.\\n"
         "- Some approved candidates may still be deferred by not selecting them.\\n"
         "- Treat provided candidate refined_actions as trusted inputs; focus on conflict resolution and final refinement.\\n"
         "\\n"
@@ -188,7 +186,7 @@ def build_final_review_prompt(
         "\\n"
         "Output contract:\\n"
         "Return strict JSON with key: selected.\\n"
-        'Format: {"selected":[{"candidate_index":0,"refined_actions":[...]}, ...]}\\n'
+        'Format: {"selected":[{"candidate_index":0,"refined_actions":[...],"justification":"..."}, ...]}\\n'
         "Refined action schema (only these three action types):\\n"
         '- add_child: {"action_type":"add_child","objective_node_id":"<existing_parent_id>","semantic_payload":{"child_name":"...","child_level":"topic|subtopic|claim","child_cmb":{"definition":"...","include_terms":[],"exclude_terms":[],"examples":[]}}}\\n'
         '- update_cmb: {"action_type":"update_cmb","objective_node_id":"<existing_node_id>","semantic_payload":{"new_cmb":{"definition":"...","include_terms":[],"exclude_terms":[],"examples":[]}}}\\n'
@@ -203,6 +201,7 @@ def build_final_review_prompt(
         '- topic anchor: {"action_type":"add_path","objective_node_id":"<existing_topic_id>","semantic_payload":{"nodes":[{"level":"subtopic",...},{"level":"claim",...}]}}\\n'
         "- candidate_index must refer to provided candidates.\\n"
         "- refined_actions must follow allowed schema and contain one or more actions.\\n"
+        "- justification must explain why this candidate was selected/refined (<= 2 sentences).\\n"
     )
 
 

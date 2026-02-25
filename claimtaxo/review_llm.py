@@ -61,16 +61,18 @@ def _sample_proposals_for_review(
 
     out = []
     for r in picked:
-        txt = str(r.get("post_summary", ""))
+        post_title = str(r.get("post_title", ""))
+        post_text = str(r.get("post_text", ""))
         if max_post_words > 0:
-            txt = " ".join(txt.split()[:max_post_words])
+            post_title = " ".join(post_title.split()[:max_post_words])
+            post_text = " ".join(post_text.split()[:max_post_words])
         out.append(
             {
-                "proposal_id": r.get("proposal_id"),
                 "action_type": r.get("action_type"),
                 "objective_node_id": r.get("objective_node_id"),
                 "action_explanation": r.get("action_explanation", ""),
-                "post_summary": txt,
+                "post_title": post_title,
+                "post_text": post_text,
             }
         )
     return out
@@ -103,7 +105,6 @@ def review_action_cluster(
     }
     prompt = build_review_cluster_prompt(
         root_topic=root_topic,
-        window_id=window_id,
         cluster_brief=cluster_brief,
         sampled=sampled,
         taxonomy_ctx=taxonomy_context(taxonomy, max_nodes=None),
@@ -150,7 +151,7 @@ def review_final_action_pool(
         return []
     if not llm.available():
         return [
-            {"candidate_index": int(i), "refined_actions": list(c.get("refined_actions", []))}
+            {"candidate_index": int(i), "refined_actions": list(c.get("refined_actions", [])), "justification": ""}
             for i, c in enumerate(candidates)
         ]
 
@@ -159,10 +160,6 @@ def review_final_action_pool(
         compact.append(
             {
                 "candidate_index": i,
-                "cluster_id": c.get("cluster_id"),
-                "cluster_mode": c.get("cluster_mode"),
-                "proposal_count": len(c.get("proposal_ids", [])),
-                "quality": c.get("quality", {}),
                 "refined_actions": c.get("refined_actions", []),
             }
         )
@@ -183,7 +180,7 @@ def review_final_action_pool(
     )
     if not payload:
         return [
-            {"candidate_index": int(i), "refined_actions": list(c.get("refined_actions", []))}
+            {"candidate_index": int(i), "refined_actions": list(c.get("refined_actions", [])), "justification": ""}
             for i, c in enumerate(candidates)
         ]
 
@@ -207,11 +204,17 @@ def review_final_action_pool(
                 refined.append(norm)
         if not refined:
             refined = list(candidates[idx].get("refined_actions", []))
-        selected.append({"candidate_index": idx, "refined_actions": refined})
+        selected.append(
+            {
+                "candidate_index": idx,
+                "refined_actions": refined,
+                "justification": str(item.get("justification", "")).strip(),
+            }
+        )
 
     if not selected:
         return [
-            {"candidate_index": int(i), "refined_actions": list(c.get("refined_actions", []))}
+            {"candidate_index": int(i), "refined_actions": list(c.get("refined_actions", [])), "justification": ""}
             for i, c in enumerate(candidates)
         ]
     return selected

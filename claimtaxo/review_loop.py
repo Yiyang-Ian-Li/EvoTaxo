@@ -357,9 +357,9 @@ def process_windows(
                         "action_type": c.get("action_type"),
                         "objective_node_path": _node_path_names(taxonomy, c.get("objective_node_id")),
                         "decision": review["decision"],
-                        "reason": review.get("reason", ""),
                         "proposal_count": len(pids),
                         "review_refined_actions": _format_refined_actions_readable(taxonomy, review.get("refined_actions", [])),
+                        "reason": review.get("reason", ""),
                     }
                 )
                 if review["decision"] == "approve" and review.get("refined_actions"):
@@ -393,6 +393,7 @@ def process_windows(
         for item in selected:
             idx = int(item["candidate_index"])
             cand = approved_candidates[idx]
+            final_justification = str(item.get("justification", "")).strip()
             pids = [pid for pid in cand["proposal_ids"] if pid in pending_ids]
             if not pids:
                 continue
@@ -421,9 +422,10 @@ def process_windows(
                         "objective_node_path": _node_path_names(taxonomy, cand.get("objective_node_id")),
                         "decision": "defer",
                         "final_status": "conflict_skip",
-                        "reason": "proposal_ids_already_consumed",
                         "proposal_count": len(pids),
                         "final_actions": [],
+                        "reason": "proposal_ids_already_consumed",
+                        "justification": final_justification,
                     }
                 )
                 resolved_cluster_ids.add(cand["cluster_id"])
@@ -495,9 +497,10 @@ def process_windows(
                         "objective_node_path": _node_path_names(taxonomy, cand.get("objective_node_id")),
                         "decision": "defer",
                         "final_status": "invalid_deferred",
-                        "reason": invalid_reasons[0] if invalid_reasons else "missing_refined_actions",
                         "proposal_count": len(pids),
                         "final_actions": [],
+                        "reason": invalid_reasons[0] if invalid_reasons else "missing_refined_actions",
+                        "justification": final_justification,
                     }
                 )
                 resolved_cluster_ids.add(cand["cluster_id"])
@@ -526,7 +529,6 @@ def process_windows(
                 "cluster_mode": cand["cluster_mode"],
                 "decision": "approve",
                 "final_status": "applied",
-                "reason": "",
                 "proposal_ids": pids,
                 "final_actions": valid_actions,
             }
@@ -541,9 +543,10 @@ def process_windows(
                     "objective_node_path": _node_path_names(taxonomy, cand.get("objective_node_id")),
                     "decision": "approve",
                     "final_status": "applied",
-                    "reason": "",
                     "proposal_count": len(pids),
                     "final_actions": _format_refined_actions_readable(taxonomy, valid_actions),
+                    "reason": "",
+                    "justification": final_justification,
                 }
             )
             resolved_cluster_ids.add(cand["cluster_id"])
@@ -579,9 +582,10 @@ def process_windows(
                     "objective_node_path": _node_path_names(taxonomy, cand.get("objective_node_id")),
                     "decision": "defer",
                     "final_status": "not_selected_in_pool",
-                    "reason": "not_selected_by_final_pool",
                     "proposal_count": len(pids),
                     "final_actions": [],
+                    "reason": "not_selected_by_final_pool",
+                    "justification": "",
                 }
             )
 
@@ -687,6 +691,8 @@ def process_windows(
                 "timestamp": ts_iso,
                 "timestamp_epoch": float(row["timestamp_epoch"]),
                 "window_id": window_id,
+                "post_title": str(row.get(cfg.title_col, "")).strip() if cfg.title_col else "",
+                "post_text": str(row.get(cfg.text_col, "")).strip(),
                 "action_type": a["action_type"],
                 "objective_node_id": a.get("objective_node_id"),
                 "action_explanation": a.get("action_explanation", ""),
