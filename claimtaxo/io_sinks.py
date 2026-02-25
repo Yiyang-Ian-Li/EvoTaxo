@@ -48,25 +48,17 @@ class AssignmentSink:
 @dataclass
 class RunSinks:
     assignment: AssignmentSink
-    event_log: JsonlSink
-    llm_trace: JsonlSink
-    taxonomy_ops: JsonlSink
-    cluster_reviews: JsonlSink
-    semantic_clusters: JsonlSink
-    temporal_clusters: JsonlSink
-    window_summary: JsonlSink
-    bursts: JsonlSink
+    action_proposals: JsonlSink
+    clusters_overview: JsonlSink
+    cluster_decisions: JsonlSink
+    taxonomy_updates: JsonlSink
 
 
 def create_run_sinks(output_dir: str) -> RunSinks:
     return RunSinks(
         assignment=AssignmentSink(os.path.join(output_dir, "post_assignments.csv")),
-        event_log=JsonlSink(os.path.join(output_dir, "event_log.jsonl")),
-        llm_trace=JsonlSink(os.path.join(output_dir, "llm_trace.jsonl")),
-        taxonomy_ops=JsonlSink(os.path.join(output_dir, "taxonomy_ops_log.jsonl")),
-        cluster_reviews=JsonlSink(os.path.join(output_dir, "cluster_reviews.jsonl")),
-        semantic_clusters=JsonlSink(os.path.join(output_dir, "action_clusters_semantic.jsonl")),
-        temporal_clusters=JsonlSink(os.path.join(output_dir, "action_clusters_temporal.jsonl")),
-        window_summary=JsonlSink(os.path.join(output_dir, "window_summary.jsonl")),
-        bursts=JsonlSink(os.path.join(output_dir, "bursts.jsonl")),
+        action_proposals=JsonlSink(os.path.join(output_dir, "action_proposals.jsonl")),
+        clusters_overview=JsonlSink(os.path.join(output_dir, "clusters_overview.jsonl")),
+        cluster_decisions=JsonlSink(os.path.join(output_dir, "cluster_decisions.jsonl")),
+        taxonomy_updates=JsonlSink(os.path.join(output_dir, "taxonomy_updates.jsonl")),
     )

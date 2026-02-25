@@ -36,10 +36,7 @@ def normalize_refined_action(raw: Any) -> Optional[Dict[str, Any]]:
     normalized = {
         "action_type": action_type,
         "objective_node_id": objective_node_id,
-        "objective": str(raw.get("objective", "")).strip(),
         "semantic_payload": {},
-        "confidence": float(raw.get("confidence", 0.0)) if str(raw.get("confidence", "")).strip() else 0.0,
-        "reasoning_short": str(raw.get("reasoning_short", "")).strip(),
     }
 
     sem = raw.get("semantic_payload", {})
@@ -109,11 +106,8 @@ def normalize_proposal_action(raw: Any) -> Optional[Dict[str, Any]]:
     return {
         "action_type": action_type,
         "objective_node_id": objective_node_id,
-        "objective": str(raw.get("objective", "")).strip(),
         "action_explanation": action_explanation,
         "post_summary": post_summary,
-        "confidence": float(raw.get("confidence", 0.0)) if str(raw.get("confidence", "")).strip() else 0.0,
-        "reasoning_short": str(raw.get("reasoning_short", "")).strip(),
     }
 
 
@@ -143,9 +137,13 @@ def validate_refined_action_executable(
         return False, "objective_node_not_found"
 
     if action_type == "set_node":
+        if objective_node_id == taxonomy.root_id:
+            return False, "set_node_on_root_not_allowed"
         return True, ""
 
     if action_type == "update_cmb":
+        if objective_node_id == taxonomy.root_id:
+            return False, "update_cmb_on_root_not_allowed"
         return True, ""
 
     if action_type == "add_child":

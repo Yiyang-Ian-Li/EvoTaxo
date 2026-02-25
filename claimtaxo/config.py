@@ -17,7 +17,7 @@ class LLMConfig:
     # Global on/off switch for all LLM calls.
     enabled: bool = True
     # LLM provider backend.
-    provider: str = "custom"  # custom | openai | openrouter
+    provider: str = "openai"  # custom | openai | openrouter
     # Optional environment variable name override for API key.
     # If None, provider-specific defaults are used automatically.
     api_key_env: Optional[str] = None
@@ -25,7 +25,9 @@ class LLMConfig:
     # If None, provider-specific defaults are used automatically.
     api_url: Optional[str] = None
     # Model name for selected provider.
-    model: str = "gpt-oss:120b"
+    model: str = "gpt-4o-mini"
+    # Optional shared model override for review/final-review/repair stages.
+    later_stage_model: Optional[str] = "gpt-5.1"
     # HTTP timeout per LLM request (seconds).
     timeout_s: int = 60
     # Sampling temperature for LLM generation.
@@ -36,16 +38,12 @@ class LLMConfig:
     retry_backoff_s: float = 1.0
     # Retries for malformed/non-parseable JSON outputs.
     max_parse_attempts: int = 4
-    # Trace verbosity for llm_trace.jsonl.
-    trace_mode: str = "compact"  # off | compact | full
-    # Max stored chars for prompt/response in compact trace mode.
-    trace_max_chars: int = 400
 
 
 @dataclass
 class PipelineConfig:
     # Input CSV path.
-    input_path: str = "data/opiates_claimtaxo_input_5labels_ge0.7.csv"
+    input_path: str = "data/opiates_claimtaxo_input_5labels_ge0.8.csv"
     # Output directory for all artifacts.
     output_dir: str = "results"
     # Column names and filter for selecting working rows.
@@ -60,27 +58,25 @@ class PipelineConfig:
     # Drop rows before this year.
     min_year: int = 2014
     # Truncate post text to first N words.
-    max_post_words: int = 300
+    max_post_words: int = 500
 
     # Time window unit.
     window_unit: str = "year"  # month | quarter | year
     # Direct map threshold for post->claim cosine similarity.
-    high_sim_threshold: float = 0.75
+    high_sim_threshold: float = 0.7
 
     # Cluster quality gates and HDBSCAN settings.
-    min_cluster_size_review: int = 6
-    min_cluster_size_hdbscan: int = 6
-    min_cohesion: float = 0.6
+    min_cluster_size_review: int = 3
+    min_cluster_size_hdbscan: int = 3
+    min_cohesion: float = 0.5
     min_time_compactness: float = 0.2
     # Temporal clustering distance weights.
     temporal_w_sem: float = 0.5
     temporal_w_time: float = 0.5
     # Number of proposal samples shown to final-review LLM per cluster.
-    review_max_examples: int = 12
-    # Per-sample post text truncation for final-review prompt.
-    review_max_post_chars: int = 400
+    review_max_examples: int = 10
     # Trigger a review/apply cycle every N newly processed posts.
-    review_batch_every_n_posts: int = 1000
+    review_batch_every_n_posts: int = 500
 
     # Nested configs.
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)

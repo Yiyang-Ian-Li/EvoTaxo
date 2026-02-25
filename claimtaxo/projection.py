@@ -58,72 +58,27 @@ def build_window_taxonomy_views(
     return out
 
 
-def build_final_burst_summary(
-    bursts: List[Dict[str, Any]],
+def build_final_node_post_counts(
     taxonomy: Taxonomy,
-) -> Dict[str, Any]:
-    approved = [b for b in bursts if str(b.get("decision", "")).lower() == "approve"]
-    approved.sort(key=lambda x: (str(x.get("window_id", "")), str(x.get("cluster_id", ""))))
+    node_post_links: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    node_to_posts: Dict[str, set[str]] = defaultdict(set)
+    for row in node_post_links:
+        nid = str(row.get("node_id", "")).strip()
+        pid = str(row.get("post_id", "")).strip()
+        if nid in taxonomy.nodes and pid:
+            node_to_posts[nid].add(pid)
 
-    timeline = []
-    affected_nodes: Dict[str, Dict[str, Any]] = {}
-    affected_actions: Dict[str, int] = defaultdict(int)
-
-    for b in approved:
-        node_id = b.get("objective_node_id")
-        action_type = str(b.get("action_type", ""))
-        affected_actions[action_type] += 1
-
-        node_name = None
-        node_level = None
-        if node_id in taxonomy.nodes:
-            node_name = taxonomy.nodes[node_id].name
-            node_level = taxonomy.nodes[node_id].level
-            if node_id not in affected_nodes:
-                affected_nodes[node_id] = {
-                    "node_id": node_id,
-                    "name": node_name,
-                    "level": node_level,
-                    "approved_temporal_clusters": 0,
-                    "windows": set(),
-                    "actions": defaultdict(int),
-                }
-            affected_nodes[node_id]["approved_temporal_clusters"] += 1
-            affected_nodes[node_id]["windows"].add(str(b.get("window_id", "")))
-            affected_nodes[node_id]["actions"][action_type] += 1
-
-        timeline.append(
+    out: List[Dict[str, Any]] = []
+    for nid, node in taxonomy.nodes.items():
+        out.append(
             {
-                "window_id": b.get("window_id"),
-                "cluster_id": b.get("cluster_id"),
-                "action_type": action_type,
-                "objective_node_id": node_id,
-                "objective_node_name": node_name,
-                "objective_node_level": node_level,
-                "size": int(b.get("size", 0)),
-                "quality": b.get("quality", {}),
-                "refined_actions": b.get("refined_actions", []),
-                "refined_action_count": int(b.get("refined_action_count", 0)),
+                "node_id": nid,
+                "name": node.name,
+                "level": node.level,
+                "parent_id": node.parent_id,
+                "post_count": int(len(node_to_posts.get(nid, set()))),
             }
         )
-
-    nodes_out = []
-    for _, v in affected_nodes.items():
-        nodes_out.append(
-            {
-                "node_id": v["node_id"],
-                "name": v["name"],
-                "level": v["level"],
-                "approved_temporal_clusters": int(v["approved_temporal_clusters"]),
-                "windows": sorted([w for w in v["windows"] if w]),
-                "actions": dict(v["actions"]),
-            }
-        )
-    nodes_out.sort(key=lambda x: (-x["approved_temporal_clusters"], x["name"] or "", x["node_id"]))
-
-    return {
-        "approved_temporal_cluster_count": len(approved),
-        "affected_action_counts": dict(sorted(affected_actions.items())),
-        "affected_nodes": nodes_out,
-        "timeline": timeline,
-    }
+    out.sort(key=lambda x: (-x["post_count"], x["level"], x["name"], x["node_id"]))
+    return out

@@ -25,10 +25,11 @@ def load_data(cfg: PipelineConfig) -> pd.DataFrame:
     df = df[df[cfg.timestamp_col].dt.year >= cfg.min_year].copy()
 
     def build_text(row: pd.Series) -> str:
+        title = safe_text(row.get(cfg.title_col, "")).strip()
         body = safe_text(row.get(cfg.text_col, "")).strip()
-        if body:
-            return body
-        return safe_text(row.get(cfg.title_col, "")).strip()
+        if title and body:
+            return f"{title}\n\n{body}"
+        return title or body
 
     df["_text"] = df.apply(build_text, axis=1)
     if cfg.max_post_words > 0:

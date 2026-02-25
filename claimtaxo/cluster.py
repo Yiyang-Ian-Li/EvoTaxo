@@ -18,14 +18,7 @@ def group_key(p: Dict[str, Any]) -> Tuple[str, str]:
 def semantic_text(p: Dict[str, Any]) -> str:
     explanation = str(p.get("action_explanation", "")).strip()
     summary = str(p.get("post_summary", "")).strip()
-    text = " ".join([x for x in [explanation, summary] if x])
-    if text:
-        return text
-    # Backward compatibility for older proposal files.
-    sem = p.get("semantic_payload", {})
-    if isinstance(sem, dict) and sem:
-        return str(sem)
-    return ""
+    return " ".join([x for x in [explanation, summary] if x])
 
 
 def _norm(v: np.ndarray) -> np.ndarray:
@@ -37,6 +30,21 @@ def _norm(v: np.ndarray) -> np.ndarray:
 def _cosine_distance_matrix(emb: np.ndarray) -> np.ndarray:
     e = _norm(emb.astype(np.float64, copy=False))
     sim = np.clip(e @ e.T, -1.0, 1.0)
+    return (1.0 - sim).astype(np.float64, copy=False)
+
+
+def _cosine_distance_to_centroid(emb: np.ndarray, idx: np.ndarray) -> np.ndarray:
+    if len(idx) == 0:
+        return np.array([], dtype=np.float64)
+    members = emb[idx].astype(np.float64, copy=False)
+    member_norms = np.linalg.norm(members, axis=1, keepdims=True)
+    member_norms[member_norms == 0] = 1.0
+    members = members / member_norms
+    centroid = np.mean(members, axis=0, keepdims=True)
+    centroid_norm = np.linalg.norm(centroid, axis=1, keepdims=True)
+    centroid_norm[centroid_norm == 0] = 1.0
+    centroid = centroid / centroid_norm
+    sim = np.clip((members @ centroid.T).reshape(-1), -1.0, 1.0)
     return (1.0 - sim).astype(np.float64, copy=False)
 
 
@@ -129,6 +137,9 @@ def cluster_group(
             if len(idx) == 0:
                 continue
             first = proposals[int(idx[0])]
+            centroid_dist = _cosine_distance_to_centroid(embeddings, idx)
+            centroid_order = [int(x) for x in np.argsort(centroid_dist)]
+            centroid_proposal_ids = [proposals[int(idx[i])]["proposal_id"] for i in centroid_order]
             store.append(
                 {
                     "cluster_id": f"{mode}:{first.get('action_type')}:{first.get('objective_node_id')}:{cid}",
@@ -137,6 +148,7 @@ def cluster_group(
                     "action_type": first.get("action_type"),
                     "objective_node_id": first.get("objective_node_id"),
                     "proposal_ids": [proposals[int(i)]["proposal_id"] for i in idx],
+                    "centroid_proposal_ids": centroid_proposal_ids,
                     "size": int(len(idx)),
                     "quality": qmap.get(int(cid), {"cohesion": 0.0, "stability": 0.0, "time_compactness": 0.0}),
                 }

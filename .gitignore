@@ -5,6 +5,7 @@ test_api.py
 
 # Data files
 results/
+Data/
 *.csv
 *.html
 *.sh

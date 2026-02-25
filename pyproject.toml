@@ -22,4 +22,5 @@ dependencies = [
     "umap-learn>=0.5.7",
     "unidecode>=1.4.0",
     "zstandard>=0.25.0",
+    "streamlit>=1.19.0",
 ]

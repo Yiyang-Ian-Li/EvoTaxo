@@ -89,10 +89,8 @@ Build a time-evolving claim taxonomy where:
   "window_id": "2024-03",
   "action_type": "set_node|add_child|add_path|update_cmb|skip_post",
   "objective_node_id": "uuid|null",
-  "objective": "one-line intent",
-  "semantic_payload": {},
-  "confidence": 0.0,
-  "reasoning_short": "string",
+  "action_explanation": "string",
+  "post_summary": "string",
   "status": "pending|clustered|approved|rejected|deferred|applied",
   "cluster_ids": {
     "semantic": "string|null",
@@ -172,7 +170,6 @@ Allowed shapes only:
     {
       "action_type": "set_node|add_child|add_path|update_cmb|skip_post",
       "objective_node_id": "uuid|null",
-      "objective": "string",
       "semantic_payload": {}
     }
   ],

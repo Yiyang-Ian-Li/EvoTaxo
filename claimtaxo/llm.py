@@ -65,18 +65,20 @@ class LLMClient:
         prompt: str,
         response_format: Optional[Dict[str, Any]] = None,
         system_prompt: Optional[str] = None,
+        model_override: Optional[str] = None,
     ) -> Optional[str]:
         if not self.available():
             return None
         if self.provider in {"openai", "openrouter"}:
-            return self._chat_openai(prompt, response_format, system_prompt)
-        return self._chat_custom(prompt, response_format, system_prompt)
+            return self._chat_openai(prompt, response_format, system_prompt, model_override=model_override)
+        return self._chat_custom(prompt, response_format, system_prompt, model_override=model_override)
 
     def _chat_custom(
         self,
         prompt: str,
         response_format: Optional[Dict[str, Any]] = None,
         system_prompt: Optional[str] = None,
+        model_override: Optional[str] = None,
     ) -> Optional[str]:
         
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
@@ -86,7 +88,7 @@ class LLMClient:
         messages.append({"role": "user", "content": prompt})
 
         payload: Dict[str, Any] = {
-            "model": self.cfg.model,
+            "model": (model_override or self.cfg.model),
             "messages": messages,
             "temperature": self.cfg.temperature,
         }
@@ -132,6 +134,7 @@ class LLMClient:
         prompt: str,
         response_format: Optional[Dict[str, Any]] = None,
         system_prompt: Optional[str] = None,
+        model_override: Optional[str] = None,
     ) -> Optional[str]:
         if self.openai_client is None:
             return None
@@ -142,7 +145,7 @@ class LLMClient:
         messages.append({"role": "user", "content": prompt})
 
         kwargs: Dict[str, Any] = {
-            "model": self.cfg.model,
+            "model": (model_override or self.cfg.model),
             "messages": messages,
             "temperature": self.cfg.temperature,
             "timeout": self.cfg.timeout_s,

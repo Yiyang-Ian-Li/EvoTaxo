@@ -14,64 +14,62 @@ from prompts import (
 from taxonomy import Taxonomy
 
 
+ALLOWED_REVIEW_ACTIONS = {"add_child", "add_path", "update_cmb"}
+
+
 def _sample_proposals_for_review(
     proposal_records: List[Dict[str, Any]],
     max_examples: int,
-    max_post_chars: int,
+    max_post_words: int,
+    centroid_proposal_ids: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     if not proposal_records:
         return []
     k = max(1, min(int(max_examples), len(proposal_records)))
 
     records = list(proposal_records)
-    records.sort(key=lambda x: float(x.get("timestamp_epoch", 0.0)))
-    time_picks = []
-    if len(records) <= k:
-        time_picks = records
-    else:
-        idxs = []
-        for i in range(k):
-            idx = int(round(i * (len(records) - 1) / max(1, k - 1)))
-            if idx not in idxs:
-                idxs.append(idx)
-        time_picks = [records[i] for i in idxs][:k]
-
-    ranked = sorted(
-        records,
-        key=lambda x: (
-            -float(x.get("confidence", 0.0)),
-            str(x.get("proposal_id", "")),
-        ),
-    )
-    top_k = ranked[: max(1, k // 2)]
-
+    by_pid = {str(r.get("proposal_id", "")): r for r in records}
+    picked: List[Dict[str, Any]] = []
     seen = set()
-    picked = []
-    for rec in top_k + time_picks:
-        pid = str(rec.get("proposal_id", ""))
-        if pid in seen:
-            continue
-        seen.add(pid)
-        picked.append(rec)
-        if len(picked) >= k:
-            break
+
+    if isinstance(centroid_proposal_ids, list) and centroid_proposal_ids:
+        for pid_raw in centroid_proposal_ids:
+            pid = str(pid_raw)
+            rec = by_pid.get(pid)
+            if rec is None or pid in seen:
+                continue
+            seen.add(pid)
+            picked.append(rec)
+            if len(picked) >= k:
+                break
+
+    records.sort(
+        key=lambda x: (
+            float(x.get("timestamp_epoch", 0.0)),
+            str(x.get("proposal_id", "")),
+        )
+    )
+    if len(picked) < k:
+        for rec in records:
+            pid = str(rec.get("proposal_id", ""))
+            if pid in seen:
+                continue
+            seen.add(pid)
+            picked.append(rec)
+            if len(picked) >= k:
+                break
 
     out = []
     for r in picked:
         txt = str(r.get("post_summary", ""))
-        if max_post_chars > 0:
-            txt = txt[:max_post_chars]
+        if max_post_words > 0:
+            txt = " ".join(txt.split()[:max_post_words])
         out.append(
             {
                 "proposal_id": r.get("proposal_id"),
-                "post_id": r.get("post_id"),
-                "window_id": r.get("window_id"),
-                "timestamp": r.get("timestamp"),
                 "action_type": r.get("action_type"),
                 "objective_node_id": r.get("objective_node_id"),
                 "action_explanation": r.get("action_explanation", ""),
-                "confidence": r.get("confidence", 0.0),
-                "reasoning_short": r.get("reasoning_short", ""),
                 "post_summary": txt,
             }
         )
@@ -87,13 +85,14 @@ def review_action_cluster(
     proposal_records: List[Dict[str, Any]],
     max_parse_attempts: int,
     max_review_examples: int,
-    max_review_post_chars: int,
-    trace: Optional[List[Dict[str, Any]]] = None,
+    max_review_post_words: int,
+    model_override: Optional[str] = None,
 ) -> Dict[str, Any]:
     sampled = _sample_proposals_for_review(
         proposal_records,
         max_examples=max_review_examples,
-        max_post_chars=max_review_post_chars,
+        max_post_words=max_review_post_words,
+        centroid_proposal_ids=cluster_record.get("centroid_proposal_ids"),
     )
     cluster_brief = {
         "cluster_mode": cluster_record.get("cluster_mode"),
@@ -116,14 +115,7 @@ def review_action_cluster(
         prompt,
         system,
         max_parse_attempts=max_parse_attempts,
-        trace=trace,
-        trace_meta={
-            "call": "review_action_cluster",
-            "window_id": window_id,
-            "cluster_id": str(cluster_record.get("cluster_id", "")),
-            "proposal_total": len(proposal_records),
-            "proposal_sampled": len(sampled),
-        },
+        model_override=model_override,
     )
     if not payload:
         return {"decision": "defer", "refined_actions": [], "reason": "parse_fail"}
@@ -135,7 +127,7 @@ def review_action_cluster(
     refined_actions = []
     for item in payload.get("refined_actions", []):
         norm = normalize_refined_action(item)
-        if norm is not None:
+        if norm is not None and str(norm.get("action_type", "")) in ALLOWED_REVIEW_ACTIONS:
             refined_actions.append(norm)
 
     return {
@@ -152,7 +144,7 @@ def review_final_action_pool(
     batch_id: str,
     candidates: List[Dict[str, Any]],
     max_parse_attempts: int,
-    trace: Optional[List[Dict[str, Any]]] = None,
+    model_override: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     if not candidates:
         return []
@@ -164,28 +156,14 @@ def review_final_action_pool(
 
     compact = []
     for i, c in enumerate(candidates):
-        records = c.get("records", []) if isinstance(c.get("records", []), list) else []
-        examples = []
-        for r in records[:3]:
-            if not isinstance(r, dict):
-                continue
-            examples.append(
-                {
-                    "action_explanation": str(r.get("action_explanation", ""))[:240],
-                    "post_summary": str(r.get("post_summary", ""))[:240],
-                }
-            )
         compact.append(
             {
                 "candidate_index": i,
                 "cluster_id": c.get("cluster_id"),
                 "cluster_mode": c.get("cluster_mode"),
-                "action_type": c.get("action_type"),
-                "objective_node_id": c.get("objective_node_id"),
                 "proposal_count": len(c.get("proposal_ids", [])),
                 "quality": c.get("quality", {}),
                 "refined_actions": c.get("refined_actions", []),
-                "examples": examples,
             }
         )
 
@@ -201,12 +179,7 @@ def review_final_action_pool(
         prompt,
         system,
         max_parse_attempts=max_parse_attempts,
-        trace=trace,
-        trace_meta={
-            "call": "review_final_action_pool",
-            "batch_id": batch_id,
-            "candidate_count": len(candidates),
-        },
+        model_override=model_override,
     )
     if not payload:
         return [
@@ -230,7 +203,7 @@ def review_final_action_pool(
         refined = []
         for a in item.get("refined_actions", []):
             norm = normalize_refined_action(a)
-            if norm is not None:
+            if norm is not None and str(norm.get("action_type", "")) in ALLOWED_REVIEW_ACTIONS:
                 refined.append(norm)
         if not refined:
             refined = list(candidates[idx].get("refined_actions", []))
@@ -252,7 +225,7 @@ def repair_final_action_candidate(
     candidate: Dict[str, Any],
     invalid_reason: str,
     max_parse_attempts: int,
-    trace: Optional[List[Dict[str, Any]]] = None,
+    model_override: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     if not llm.available():
         return []
@@ -291,13 +264,7 @@ def repair_final_action_candidate(
         prompt,
         system,
         max_parse_attempts=max_parse_attempts,
-        trace=trace,
-        trace_meta={
-            "call": "repair_final_action_candidate",
-            "batch_id": batch_id,
-            "cluster_id": str(candidate.get("cluster_id", "")),
-            "invalid_reason": invalid_reason,
-        },
+        model_override=model_override,
     )
     if not payload:
         return []
@@ -311,6 +278,6 @@ def repair_final_action_candidate(
     out: List[Dict[str, Any]] = []
     for raw in raw_actions:
         norm = normalize_refined_action(raw)
-        if norm is not None:
+        if norm is not None and str(norm.get("action_type", "")) in ALLOWED_REVIEW_ACTIONS:
             out.append(norm)
     return out
