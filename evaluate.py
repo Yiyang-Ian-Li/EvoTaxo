@@ -5,6 +5,8 @@ import math
 import os
 from typing import Dict, Tuple
 
+from dotenv import load_dotenv
+
 from metrics.common import ensure_dir, load_nodes, resolve_device, write_csv, write_json
 from metrics.csc import compute_csc
 from metrics.llm_client import EvalLLMClient, EvalLLMConfig
@@ -28,9 +30,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--device-id", type=int, default=0)
     p.add_argument("--include-root-edges", action="store_true")
 
-    p.add_argument("--llm-provider", default="custom", choices=["custom", "openai"])
-    p.add_argument("--llm-model", default="gpt-oss:120b")
-    p.add_argument("--llm-api-url", default="https://openwebui.crc.nd.edu/api/v1/chat/completions")
+    p.add_argument("--llm-model", default="gpt-4o-mini")
+    p.add_argument("--llm-api-url", default=None)
     p.add_argument("--llm-api-key-env", default="OPENAI_API_KEY")
     p.add_argument("--llm-timeout-s", type=int, default=60)
     p.add_argument("--llm-max-retries", type=int, default=2)
@@ -48,6 +49,7 @@ def write_metric_file(path: str, metric_name: str, value: float, meta: Dict) -> 
 
 
 def main() -> None:
+    load_dotenv(override=False)
     args = build_parser().parse_args()
     taxonomy_json = resolve_taxonomy_path(args)
     output_dir = os.path.abspath(args.output_dir)
@@ -68,7 +70,7 @@ def main() -> None:
     )
 
     llm_cfg = EvalLLMConfig(
-        provider=args.llm_provider,
+        provider="openai",
         api_key_env=args.llm_api_key_env,
         api_url=args.llm_api_url,
         model=args.llm_model,
@@ -97,7 +99,7 @@ def main() -> None:
         "embedding_model": args.embedding_model,
         "nli_model": args.nli_model,
         "root_topic": args.root_topic,
-        "llm_provider": args.llm_provider,
+        "llm_provider": "openai",
         "llm_model": args.llm_model,
         "include_root_edges": args.include_root_edges,
         "details": {

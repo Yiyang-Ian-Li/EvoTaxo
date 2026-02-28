@@ -20,8 +20,8 @@ Run with LLM provider/model override:
 uv run python claimtaxo/pipeline.py \
   --input naloxone_mentions.csv \
   --output /tmp/claimtaxo_run \
-  --llm-provider custom \
-  --llm-model gpt-oss:120b
+  --llm-provider openai \
+  --llm-model gpt-4o-mini
 ```
 
 Run with OpenRouter:
@@ -63,7 +63,7 @@ CLI parameters currently exposed:
 - `--output`: output directory for artifacts/logs.
 - `--high-sim`: cosine threshold for direct post-to-claim mapping.
 - `--min-year`: drop posts before this year.
-- `--llm-provider`: `custom`, `openai`, or `openrouter`.
+- `--llm-provider`: `openai` or `openrouter`.
 - `--llm-model`: model name sent to provider endpoint.
 - `--llm-api-url`: optional chat completions URL override.
 - `--llm-api-key-env`: optional env var name override for API key lookup.

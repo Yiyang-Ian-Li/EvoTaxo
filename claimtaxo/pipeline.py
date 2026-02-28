@@ -126,7 +126,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--output", default=DEFAULT_CONFIG.output_dir)
     p.add_argument("--high-sim", type=float, default=DEFAULT_CONFIG.high_sim_threshold)
     p.add_argument("--min-year", type=int, default=DEFAULT_CONFIG.min_year)
-    p.add_argument("--llm-provider", default=DEFAULT_CONFIG.llm.provider, choices=["custom", "openai", "openrouter"])
+    p.add_argument("--llm-provider", default=DEFAULT_CONFIG.llm.provider, choices=["openai", "openrouter"])
     p.add_argument("--llm-model", default=DEFAULT_CONFIG.llm.model)
     p.add_argument("--llm-later-stage-model", default=DEFAULT_CONFIG.llm.later_stage_model)
     p.add_argument("--llm-api-url", default=None)
