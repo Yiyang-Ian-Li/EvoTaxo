@@ -72,7 +72,10 @@ def load_nodes(path: str) -> Tuple[Dict[str, EvalNode], str]:
     return nodes, root_id
 
 
-def semantic_text(node: EvalNode) -> str:
+def semantic_text(node: EvalNode, text_source: str = "auto") -> str:
+    mode = (text_source or "auto").strip().lower()
+    if mode == "name":
+        return node.name
     return node.definition if node.definition else node.name
 
 

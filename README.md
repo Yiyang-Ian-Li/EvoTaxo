@@ -1,6 +1,6 @@
-# ClaimTaxo
+# EvoTaxo
 
-ClaimTaxo is a time-evolving taxonomy induction pipeline for social media posts.
+EvoTaxo is a time-evolving taxonomy induction pipeline for social media posts.
 
 ## Usage
 

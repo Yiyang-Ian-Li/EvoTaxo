@@ -26,6 +26,7 @@ def compute_nliv(
     batch_size: int,
     max_length: int,
     include_root_edges: bool,
+    text_source: str = "auto",
 ) -> Tuple[Dict, List[Dict], List[Dict]]:
     node_ids = [nid for nid, n in nodes.items() if nid != root_id and n.status == "active"]
     edges = []
@@ -54,7 +55,7 @@ def compute_nliv(
     pair_inputs: List[Dict[str, str]] = []
     pair_meta: List[Tuple[str, str, str]] = []
     for parent_id, child_id in edges:
-        premise = semantic_text(nodes[child_id])
+        premise = semantic_text(nodes[child_id], text_source=text_source)
         for hyp in hearst_hypotheses(nodes[parent_id].name, nodes[child_id].name):
             pair_inputs.append({"text": premise, "text_pair": hyp})
             pair_meta.append((parent_id, child_id, hyp))
