@@ -16,7 +16,6 @@ def normalize_cmb(value: Any) -> Dict[str, Any]:
         "definition": str(value.get("definition", "")).strip(),
         "include_terms": [str(x).strip() for x in value.get("include_terms", []) if str(x).strip()][:20],
         "exclude_terms": [str(x).strip() for x in value.get("exclude_terms", []) if str(x).strip()][:20],
-        "examples": [str(x).strip() for x in value.get("examples", []) if str(x).strip()][:10],
     }
 
 

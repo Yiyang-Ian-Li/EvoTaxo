@@ -50,7 +50,6 @@ def _proposal_taxonomy_context(taxonomy: Taxonomy) -> Dict[str, Any]:
                     "definition": n.cmb.definition,
                     "include_terms": n.cmb.include_terms,
                     "exclude_terms": n.cmb.exclude_terms,
-                    "examples": n.cmb.examples,
                 },
             }
             for n in sorted(taxonomy.nodes.values(), key=lambda x: (x.level, x.name, x.node_id))
@@ -193,6 +192,13 @@ def process_windows(
             "objective_node_id": p.get("objective_node_id"),
             "semantic_payload": {},
         }
+
+    def _pending_structural_count() -> int:
+        return sum(
+            1
+            for pid in pending_ids
+            if proposal_map.get(pid, {}).get("action_type") in {"add_child", "add_path", "update_cmb"}
+        )
 
     def _run_review_batch(batch_id: str, last_window_id: str) -> None:
         nonlocal taxonomy_dirty
@@ -658,7 +664,7 @@ def process_windows(
             )
             pbar.set_postfix(
                 mapped=mapped_direct_total,
-                pending=len(pending_ids),
+                pending=_pending_structural_count(),
                 set_node=set_node_total,
                 skip_post=skip_post_total,
             )
@@ -739,7 +745,7 @@ def process_windows(
             )
         pbar.set_postfix(
             mapped=mapped_direct_total,
-            pending=len(pending_ids),
+            pending=_pending_structural_count(),
             set_node=set_node_total,
             skip_post=skip_post_total,
         )

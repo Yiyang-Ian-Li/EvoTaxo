@@ -31,7 +31,6 @@ def taxonomy_context(taxonomy: Taxonomy, max_nodes: Optional[int] = 300) -> Dict
                     "definition": n.cmb.definition,
                     "include_terms": n.cmb.include_terms,
                     "exclude_terms": n.cmb.exclude_terms,
-                    "examples": n.cmb.examples,
                 },
             }
         )
@@ -69,16 +68,16 @@ def build_propose_post_prompt(
         f"Post text: {json.dumps(post_text, ensure_ascii=False)}\\n"
         "\\n"
         "Decision rubric and action-quality rules:\\n"
-        "- objective_node_id must be an existing node except skip_post.\\n"
-        "- Root node has level='root'.\\n"
         "- Allowed action_type: set_node, add_child, add_path, update_cmb, skip_post.\\n"
-        "- Prefer set_node when existing non-root node already fits and the post does not introduce new semantic content or fine-grained details.\\n"
-        "- Prefer update_cmb when node structure is correct but definition/include/exclude/examples should be refined.\\n"
-        "- set_node should not be used on root node.\\n"
-        "- update_cmb should not be used on root node.\\n"
-        "- add_child is for one new child under objective_node_id.\\n"
-        "- add_path shapes only: root->topic->subtopic, root->topic->subtopic->claim, topic->subtopic->claim.\\n"
-        "- For add_path, objective_node_id is the existing anchor node; do not repeat the anchor inside semantic_payload.nodes.\\n"
+        "- objective_node_id must be an existing node except skip_post.\\n"
+        "- set_node: use only for a clear near-exact fit to an existing non-root claim; if the post adds meaningful new detail, do not use set_node.\\n"
+        "- add_child: add exactly one new child under objective_node_id; the child must be clearly narrower than its parent.\\n"
+        "- add_path: use only for allowed shapes root->topic->subtopic, root->topic->subtopic->claim, topic->subtopic->claim; do not repeat the anchor inside nodes.\\n"
+        "- update_cmb: use when the node structure is right but its wording/scope should be refined; do not use on root.\\n"
+        "- skip_post: use only for clearly off-topic/noise content.\\n"
+        "- New topic/subtopic names must be specific and discriminative, not broad umbrella areas.\\n"
+        "- Do not create generic buckets such as opioid use, dependence, recovery, treatment issues, or drug discussion.\\n"
+        "- If a proposed child is almost as broad as its parent, do not add it; prefer reuse or update_cmb instead.\\n"
         f"{QUALITY_RUBRIC}\\n"
         "\\n"
         "Output contract:\\n"
@@ -118,23 +117,22 @@ def build_review_cluster_prompt(
         "\\n"
         "Context:\\n"
         f"Root topic: {json.dumps(root_topic, ensure_ascii=False)}\\n"
-        "Root node has level='root'.\\n"
         f"Current taxonomy context (full):\\n{json.dumps(taxonomy_ctx, ensure_ascii=False)}\\n"
         f"Cluster summary:\\n{json.dumps(cluster_brief, ensure_ascii=False)}\\n"
         f"Proposal sample for review (sampled_count={len(sampled)} total_cluster_count={total_cluster_count}):\\n"
         f"{json.dumps(sampled, ensure_ascii=False)}\\n"
         "\\n"
         "Decision rubric and action-quality rules:\\n"
-        f"{QUALITY_RUBRIC}\\n"
-        "- Prefer conservative edits and avoid overlapping duplicates.\\n"
-        "- Prefer update_cmb when existing node structure is right but wording/scope needs refinement.\\n"
-        "- add_path shapes: root->topic->subtopic OR root->topic->subtopic->claim OR topic->subtopic->claim.\\n"
-        "- For add_path, objective_node_id is the existing anchor node; do not repeat the anchor inside semantic_payload.nodes.\\n"
-        "- For add_child, the intended new child must include child_name, child_level, and child_cmb.\\n"
-        "- For add_path, every intended new node in semantic_payload.nodes must include name, level, and cmb.\\n"
+        "- add_child: use for one clearly justified new child that is narrower than its parent.\\n"
+        "- add_path: use only for allowed shapes root->topic->subtopic, root->topic->subtopic->claim, topic->subtopic->claim; do not repeat the anchor inside nodes.\\n"
+        "- update_cmb: use when the node exists but its wording/scope should be refined.\\n"
+        "- New topic/subtopic names must be specific and discriminative, not broad umbrella areas.\\n"
+        "- Do not approve generic buckets such as opioid use, dependence, recovery, treatment issues, or drug discussion.\\n"
+        "- If a proposed child is almost as broad as its parent, reject or rewrite it; prefer reuse or update_cmb instead.\\n"
         "- Approve only when a single coherent intent is visible across the cluster.\\n"
         "- Defer when proposals are conflicting, inconsistent, or too noisy.\\n"
         "- If approved, return only refined actions that represent the cluster intent.\\n"
+        f"{QUALITY_RUBRIC}\\n"
         "\\n"
         "Output contract:\\n"
         "Return strict JSON with keys: decision, refined_actions, reason\\n"
@@ -143,9 +141,9 @@ def build_review_cluster_prompt(
         '- {"action_type":"add_child|add_path|update_cmb","objective_node_id":"...","semantic_payload":{...}}\\n'
         "- Keep reason concise (<= 2 sentences).\\n"
         "Reference patterns:\\n"
-        '- add_child: {"decision":"approve","refined_actions":[{"action_type":"add_child","objective_node_id":"<existing_parent_id>","semantic_payload":{"child_name":"...","child_level":"claim","child_cmb":{"definition":"...","include_terms":[],"exclude_terms":[],"examples":[]}}}],"reason":"..."}\\n'
-        '- add_path: {"decision":"approve","refined_actions":[{"action_type":"add_path","objective_node_id":"<anchor_id>","semantic_payload":{"nodes":[{"name":"...","level":"topic","cmb":{"definition":"...","include_terms":[],"exclude_terms":[],"examples":[]}},{"name":"...","level":"subtopic","cmb":{"definition":"...","include_terms":[],"exclude_terms":[],"examples":[]}}]}}],"reason":"..."}\\n'
-        '- update_cmb: {"decision":"approve","refined_actions":[{"action_type":"update_cmb","objective_node_id":"<existing_node_id>","semantic_payload":{"new_cmb":{"definition":"...","include_terms":[],"exclude_terms":[],"examples":[]}}}],"reason":"..."}\\n'
+        '- add_child: {"decision":"approve","refined_actions":[{"action_type":"add_child","objective_node_id":"<existing_parent_id>","semantic_payload":{"child_name":"...","child_level":"claim","child_cmb":{"definition":"...","include_terms":[],"exclude_terms":[]}}}],"reason":"..."}\\n'
+        '- add_path: {"decision":"approve","refined_actions":[{"action_type":"add_path","objective_node_id":"<anchor_id>","semantic_payload":{"nodes":[{"name":"...","level":"topic","cmb":{"definition":"...","include_terms":[],"exclude_terms":[]}},{"name":"...","level":"subtopic","cmb":{"definition":"...","include_terms":[],"exclude_terms":[]}}]}}],"reason":"..."}\\n'
+        '- update_cmb: {"decision":"approve","refined_actions":[{"action_type":"update_cmb","objective_node_id":"<existing_node_id>","semantic_payload":{"new_cmb":{"definition":"...","include_terms":[],"exclude_terms":[]}}}],"reason":"..."}\\n'
         "- add_path shape patterns (anchor -> nodes):\\n"
         '- root anchor: {"action_type":"add_path","objective_node_id":"<root_node_id>","semantic_payload":{"nodes":[{"level":"topic",...},{"level":"subtopic",...}]}}\\n'
         '- root anchor: {"action_type":"add_path","objective_node_id":"<root_node_id>","semantic_payload":{"nodes":[{"level":"topic",...},{"level":"subtopic",...},{"level":"claim",...}]}}\\n'
@@ -174,27 +172,26 @@ def build_final_review_prompt(
         f"Taxonomy context:\\n{json.dumps(taxonomy_ctx, ensure_ascii=False)}\\n"
         "\\n"
         "Decision rubric and action-quality rules:\\n"
+        "- add_child: keep only if the new child is clearly narrower than its parent and not redundant.\\n"
+        "- add_path: keep only for allowed shapes root->topic->subtopic, root->topic->subtopic->claim, topic->subtopic->claim; do not repeat the anchor inside nodes.\\n"
+        "- update_cmb: prefer when structure is right but wording/scope needs refinement.\\n"
+        "- Topic/subtopic names must be specific and discriminative, not broad umbrella areas.\\n"
+        "- Do not keep generic buckets such as opioid use, dependence, recovery, treatment issues, or drug discussion.\\n"
+        "- If a candidate node is almost as broad as its parent, prefer reuse or update_cmb instead of adding it.\\n"
+        "- Keep final actions non-overlapping; if candidates are near-duplicates, keep one.\\n"
         f"{QUALITY_RUBRIC}\\n"
-        "- Root node has level='root'.\\n"
-        "- Select a coherent subset of candidates and refine actions when needed.\\n"
-        "- Prefer conservative edits and existing-node reuse.\\n"
-        "- Keep final actions non-overlapping.\\n"
-        "- If candidates are near-duplicates, keep one.\\n"
-        "- For add_path, objective_node_id is the existing anchor node; do not repeat the anchor inside semantic_payload.nodes.\\n"
-        "- For add_child, the intended new child must include child_name, child_level, and child_cmb.\\n"
-        "- For add_path, every intended new node in semantic_payload.nodes must include name, level, and cmb.\\n"
         "\\n"
         "Output contract:\\n"
         "Return strict JSON with key: selected.\\n"
         'Format: {"selected":[{"candidate_index":0,"refined_actions":[...],"justification":"..."}, ...]}\\n'
         "Refined action schema (only these three action types):\\n"
-        '- add_child: {"action_type":"add_child","objective_node_id":"<existing_parent_id>","semantic_payload":{"child_name":"...","child_level":"topic|subtopic|claim","child_cmb":{"definition":"...","include_terms":[],"exclude_terms":[],"examples":[]}}}\\n'
-        '- update_cmb: {"action_type":"update_cmb","objective_node_id":"<existing_node_id>","semantic_payload":{"new_cmb":{"definition":"...","include_terms":[],"exclude_terms":[],"examples":[]}}}\\n'
+        '- add_child: {"action_type":"add_child","objective_node_id":"<existing_parent_id>","semantic_payload":{"child_name":"...","child_level":"topic|subtopic|claim","child_cmb":{"definition":"...","include_terms":[],"exclude_terms":[]}}}\\n'
+        '- update_cmb: {"action_type":"update_cmb","objective_node_id":"<existing_node_id>","semantic_payload":{"new_cmb":{"definition":"...","include_terms":[],"exclude_terms":[]}}}\\n'
         '- add_path: {"action_type":"add_path","objective_node_id":"<anchor_id>","semantic_payload":{"nodes":[...]}}\\n'
         "Reference patterns:\\n"
-        '- {"candidate_index":0,"refined_actions":[{"action_type":"add_child","objective_node_id":"...","semantic_payload":{"child_name":"...","child_level":"claim","child_cmb":{"definition":"...","include_terms":[],"exclude_terms":[],"examples":[]}}}]}\\n'
-        '- {"candidate_index":1,"refined_actions":[{"action_type":"add_path","objective_node_id":"...","semantic_payload":{"nodes":[{"name":"...","level":"subtopic","cmb":{"definition":"...","include_terms":[],"exclude_terms":[],"examples":[]}},{"name":"...","level":"claim","cmb":{"definition":"...","include_terms":[],"exclude_terms":[],"examples":[]}}]}}]}\\n'
-        '- {"candidate_index":2,"refined_actions":[{"action_type":"update_cmb","objective_node_id":"...","semantic_payload":{"new_cmb":{"definition":"...","include_terms":[],"exclude_terms":[],"examples":[]}}}]}\\n'
+        '- {"candidate_index":0,"refined_actions":[{"action_type":"add_child","objective_node_id":"...","semantic_payload":{"child_name":"...","child_level":"claim","child_cmb":{"definition":"...","include_terms":[],"exclude_terms":[]}}}]}\\n'
+        '- {"candidate_index":1,"refined_actions":[{"action_type":"add_path","objective_node_id":"...","semantic_payload":{"nodes":[{"name":"...","level":"subtopic","cmb":{"definition":"...","include_terms":[],"exclude_terms":[]}},{"name":"...","level":"claim","cmb":{"definition":"...","include_terms":[],"exclude_terms":[]}}]}}]}\\n'
+        '- {"candidate_index":2,"refined_actions":[{"action_type":"update_cmb","objective_node_id":"...","semantic_payload":{"new_cmb":{"definition":"...","include_terms":[],"exclude_terms":[]}}}]}\\n'
         "- add_path shape patterns (anchor -> nodes):\\n"
         '- root anchor: {"action_type":"add_path","objective_node_id":"<root_node_id>","semantic_payload":{"nodes":[{"level":"topic",...},{"level":"subtopic",...}]}}\\n'
         '- root anchor: {"action_type":"add_path","objective_node_id":"<root_node_id>","semantic_payload":{"nodes":[{"level":"topic",...},{"level":"subtopic",...},{"level":"claim",...}]}}\\n'
@@ -226,18 +223,17 @@ def build_repair_prompt(
         f"Taxonomy context:\\n{json.dumps(taxonomy_ctx, ensure_ascii=False)}\\n"
         "\\n"
         "Decision rubric and action-quality rules:\\n"
-        f"{QUALITY_RUBRIC}\\n"
-        "- objective_node_id must reference an existing node (except skip_post).\\n"
-        "- add_path shapes must be: root->topic->subtopic OR root->topic->subtopic->claim OR topic->subtopic->claim.\\n"
-        "- For add_child, the intended new child must include child_name, child_level, and child_cmb.\\n"
-        "- For add_path, every intended new node in semantic_payload.nodes must include name, level, and cmb.\\n"
+        "- objective_node_id must reference an existing node.\\n"
+        "- add_child: return one valid child with child_name, child_level, and child_cmb.\\n"
+        "- add_path: use only allowed shapes root->topic->subtopic, root->topic->subtopic->claim, topic->subtopic->claim.\\n"
+        "- update_cmb: return only a valid new_cmb payload for an existing non-root node.\\n"
         "\\n"
         "Output contract:\\n"
         "Return strict JSON with key: refined_actions\\n"
         'Format: {"refined_actions":[{...}, ...]}\\n'
         "Action schema options (only these three action types):\\n"
-        '- add_child: {"action_type":"add_child","objective_node_id":"<existing_parent_id>","semantic_payload":{"child_name":"...","child_level":"topic|subtopic|claim","child_cmb":{"definition":"...","include_terms":[],"exclude_terms":[],"examples":[]}}}\\n'
-        '- update_cmb: {"action_type":"update_cmb","objective_node_id":"<existing_node_id>","semantic_payload":{"new_cmb":{"definition":"...","include_terms":[],"exclude_terms":[],"examples":[]}}}\\n'
+        '- add_child: {"action_type":"add_child","objective_node_id":"<existing_parent_id>","semantic_payload":{"child_name":"...","child_level":"topic|subtopic|claim","child_cmb":{"definition":"...","include_terms":[],"exclude_terms":[]}}}\\n'
+        '- update_cmb: {"action_type":"update_cmb","objective_node_id":"<existing_node_id>","semantic_payload":{"new_cmb":{"definition":"...","include_terms":[],"exclude_terms":[]}}}\\n'
         '- add_path: {"action_type":"add_path","objective_node_id":"<anchor_id>","semantic_payload":{"nodes":[...]}}\\n'
         "- Return one or more actions.\\n"
     )

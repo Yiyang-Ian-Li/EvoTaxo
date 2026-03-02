@@ -17,7 +17,7 @@ class LLMConfig:
     # Global on/off switch for all LLM calls.
     enabled: bool = True
     # LLM provider backend.
-    provider: str = "openai"  # openai | openrouter
+    provider: str = "openrouter"  # openai | openrouter
     # Optional environment variable name override for API key.
     # If None, provider-specific defaults are used automatically.
     api_key_env: Optional[str] = None
@@ -43,7 +43,7 @@ class LLMConfig:
 @dataclass
 class PipelineConfig:
     # Input CSV path.
-    input_path: str = "data/opiates_claimtaxo_input_5labels_ge0.8.csv"
+    input_path: str = "data/opiates_claimtaxo_input_5labels_ge0.75.csv"
     # Output directory for all artifacts.
     output_dir: str = "results"
     # Column names and filter for selecting working rows.

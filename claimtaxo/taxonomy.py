@@ -10,7 +10,6 @@ class CMB:
     definition: str = ""
     include_terms: List[str] = field(default_factory=list)
     exclude_terms: List[str] = field(default_factory=list)
-    examples: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -53,7 +52,6 @@ class Taxonomy:
             definition=str(cmb.get("definition", "")),
             include_terms=[str(x) for x in cmb.get("include_terms", []) if str(x).strip()],
             exclude_terms=[str(x) for x in cmb.get("exclude_terms", []) if str(x).strip()],
-            examples=[str(x) for x in cmb.get("examples", []) if str(x).strip()],
         )
         node.updated_at_window = window_id
 
@@ -66,7 +64,6 @@ class Taxonomy:
             n.name,
             n.cmb.definition,
             " ".join(n.cmb.include_terms),
-            " ".join(n.cmb.examples),
         ]
         return " ".join(p for p in parts if p)
 
@@ -92,7 +89,6 @@ class Taxonomy:
                         "definition": n.cmb.definition,
                         "include_terms": n.cmb.include_terms,
                         "exclude_terms": n.cmb.exclude_terms,
-                        "examples": n.cmb.examples,
                     },
                     "created_at_window": n.created_at_window,
                     "updated_at_window": n.updated_at_window,

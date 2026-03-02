@@ -59,8 +59,7 @@ Build a time-evolving claim taxonomy where:
   "cmb": {
     "definition": "string",
     "include_terms": ["string"],
-    "exclude_terms": ["string"],
-    "examples": ["string"]
+    "exclude_terms": ["string"]
   },
   "created_at_window": "2024-03",
   "updated_at_window": "2024-04"
@@ -110,8 +109,7 @@ Build a time-evolving claim taxonomy where:
   "child_cmb": {
     "definition": "string",
     "include_terms": ["string"],
-    "exclude_terms": ["string"],
-    "examples": ["string"]
+    "exclude_terms": ["string"]
   }
 }
 ```
@@ -121,8 +119,7 @@ Build a time-evolving claim taxonomy where:
   "new_cmb": {
     "definition": "string",
     "include_terms": ["string"],
-    "exclude_terms": ["string"],
-    "examples": ["string"]
+    "exclude_terms": ["string"]
   }
 }
 ```
@@ -130,8 +127,8 @@ Build a time-evolving claim taxonomy where:
 ```json
 {
   "nodes": [
-    {"name": "New Subtopic", "level": "subtopic", "cmb": {"definition": "...", "include_terms": [], "exclude_terms": [], "examples": []}},
-    {"name": "New Claim (optional)", "level": "claim", "cmb": {"definition": "...", "include_terms": [], "exclude_terms": [], "examples": []}}
+    {"name": "New Subtopic", "level": "subtopic", "cmb": {"definition": "...", "include_terms": [], "exclude_terms": []}},
+    {"name": "New Claim (optional)", "level": "claim", "cmb": {"definition": "...", "include_terms": [], "exclude_terms": []}}
   ]
 }
 ```
