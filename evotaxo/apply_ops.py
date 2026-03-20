@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List
 
-from taxonomy import Taxonomy
-from utils import now_ts
+from .taxonomy import Taxonomy
+from .utils import now_ts
 
 
 VALID_LEVELS = {"topic", "subtopic"}

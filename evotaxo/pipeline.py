@@ -8,22 +8,22 @@ from datetime import datetime
 
 from dotenv import load_dotenv
 
-from config import DEFAULT_CONFIG, PipelineConfig
-from data import load_data
-from embeddings import Embedder
-from io_sinks import create_run_sinks
-from llm import LLMClient
-from projection import build_final_node_post_counts, build_window_taxonomy_views
-from review_llm import generate_initial_taxonomy_actions
-from review_loop import process_windows
-from taxonomy import Taxonomy
-from apply_ops import apply_refined_actions
-from action_schema import validate_refined_action_executable
-from utils import ensure_dir, now_ts, write_json, write_jsonl
+from .config import DEFAULT_CONFIG, PipelineConfig
+from .data import load_data
+from .embeddings import Embedder
+from .io_sinks import create_run_sinks
+from .llm import LLMClient
+from .projection import build_final_node_post_counts, build_window_taxonomy_views
+from .review_llm import generate_initial_taxonomy_actions
+from .review_loop import process_windows
+from .taxonomy import Taxonomy
+from .apply_ops import apply_refined_actions
+from .action_schema import validate_refined_action_executable
+from .utils import ensure_dir, now_ts, write_json, write_jsonl
 
 
 def setup_logger(output_dir: str) -> logging.Logger:
-    logger = logging.getLogger("claimtaxo")
+    logger = logging.getLogger("evotaxo")
     logger.setLevel(logging.INFO)
     logger.handlers = []
 
@@ -48,7 +48,7 @@ def resolve_output_dir(raw_output: str) -> str:
 def run_pipeline(cfg: PipelineConfig) -> None:
     ensure_dir(cfg.output_dir)
     logger = setup_logger(cfg.output_dir)
-    logger.info("Starting ClaimTaxo pipeline")
+    logger.info("Starting EvoTaxo pipeline")
     logger.info("Input=%s Output=%s RootTopic=%s", cfg.input_path, cfg.output_dir, cfg.root_topic)
     write_json(os.path.join(cfg.output_dir, "config.json"), dataclasses.asdict(cfg))
 
@@ -183,11 +183,10 @@ def run_pipeline(cfg: PipelineConfig) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="ClaimTaxo MVP")
+    p = argparse.ArgumentParser(description="EvoTaxo")
     p.add_argument("--input", default=DEFAULT_CONFIG.input_path)
     p.add_argument("--output", default=DEFAULT_CONFIG.output_dir)
     p.add_argument("--kind-value", default=DEFAULT_CONFIG.kind_value)
-    p.add_argument("--high-sim", type=float, default=DEFAULT_CONFIG.high_sim_threshold)
     p.add_argument("--min-year", type=int, default=DEFAULT_CONFIG.min_year)
     p.add_argument("--llm-provider", default=DEFAULT_CONFIG.llm.provider, choices=["openai", "openrouter"])
     p.add_argument("--llm-model", default=DEFAULT_CONFIG.llm.model)
@@ -213,7 +212,6 @@ def main() -> None:
     cfg.input_path = args.input
     cfg.output_dir = resolve_output_dir(args.output)
     cfg.kind_value = args.kind_value
-    cfg.high_sim_threshold = args.high_sim
     cfg.min_year = args.min_year
     cfg.llm.provider = args.llm_provider
     cfg.llm.model = args.llm_model

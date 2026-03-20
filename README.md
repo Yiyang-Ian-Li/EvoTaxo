@@ -1,89 +1,71 @@
 # EvoTaxo
 
-EvoTaxo is a time-evolving taxonomy induction pipeline for social media posts.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![arXiv](https://img.shields.io/badge/arXiv-coming_soon-b31b1b.svg)](#)
 
-## Usage
+EvoTaxo is a research codebase for building and evolving taxonomies from temporally ordered social media streams. 
 
-Run with defaults:
+![EvoTaxo overview](evotaxo.png)
+
+## Method
+
+EvoTaxo processes posts chronologically. For each post, it proposes a draft action over the current taxonomy, accumulates structural actions within time windows, clusters draft actions using semantic and temporal signals, and only applies edits after a refinement-and-arbitration review procedure. Each taxonomy node keeps a concept memory bank with evolving definitions and examples.
+
+## Data
+
+The `data/` folder contains dataset preparation scripts. We collect Reddit data with [Arctic Shift](https://github.com/ArthurHeitmann/arctic_shift), then convert raw archives into CSVs for EvoTaxo and optional zero-shot label filtering.
+
+## Run
 
 ```bash
-uv run python claimtaxo/pipeline.py \
-  --input naloxone_mentions.csv \
-  --output /tmp/claimtaxo_run
+uv run python -m evotaxo.pipeline --input data/input.csv --output runs/demo
 ```
 
-`claimtaxo/pipeline.py` auto-loads a local `.env` file (via `python-dotenv`) before reading API-key environment variables.
+The pipeline auto-loads a local `.env` before reading API keys. Supported providers are OpenAI and OpenRouter.
+The main runtime defaults are defined in `evotaxo/config.py`.
 
-Run with LLM provider/model override:
+Example `.env`:
 
 ```bash
-uv run python claimtaxo/pipeline.py \
-  --input naloxone_mentions.csv \
-  --output /tmp/claimtaxo_run \
+OPENAI_API_KEY=...
+OPENROUTER_API_KEY=...
+```
+
+Example provider override:
+
+```bash
+uv run python -m evotaxo.pipeline \
+  --input data/input.csv \
+  --output runs/demo \
   --llm-provider openai \
   --llm-model gpt-4o-mini
 ```
 
-Run with OpenRouter:
+## Output
+
+Each run creates a timestamped output directory with:
+
+- `config.json`: resolved configuration used for the run.
+- `run.log`: execution log.
+- `run_meta.json`: summary counts and run metadata.
+- `taxonomy_after_bootstrap.json`: taxonomy right after optional bootstrap initialization.
+- `taxonomy_nodes_final.json`: final taxonomy nodes.
+- `taxonomy_node_post_counts_final.json`: final post counts per node.
+- `taxonomy_by_window.jsonl`: taxonomy snapshots by time window.
+- `post_assignments.csv`: post-to-node assignments.
+- `action_proposals.jsonl`: raw draft actions proposed from posts.
+- `clusters_overview.jsonl`: summaries of proposal clusters before final selection.
+- `cluster_decisions.jsonl`: review and arbitration decisions.
+- `taxonomy_after_clustering.jsonl`: taxonomy snapshots after each review batch.
+
+## Evaluation
 
 ```bash
-uv run python claimtaxo/pipeline.py \
-  --input naloxone_mentions.csv \
-  --output /tmp/claimtaxo_run \
-  --llm-provider openrouter \
-  --llm-model openai/gpt-4o-mini
+uv run python evaluate.py --run-dir runs/demo/<timestamp> --root-topic topic --output-dir metrics
 ```
 
-Evaluate generated taxonomy (reference-free CSC / NLIV):
+The LLM-based evaluation metrics currently use the OpenAI judge client in `metrics/llm_client.py`:
 
 ```bash
-uv run python evaluate.py \
-  --run-dir /tmp/claimtaxo_run \
-  --device auto \
-  --root-topic naloxone \
-  --output-dir results
+OPENAI_API_KEY=...
 ```
-
-Outputs are written to `results/`:
-- `taxonomy_eval_metrics.json`
-- `taxonomy_eval_edge_scores.csv`
-- `taxonomy_eval_path_scores.csv`
-- `csc.json`
-- `nliv_s.json`
-- `nliv_w.json`
-- `csc_x_nliv_s.json`
-- `path_granularity.json`
-- `sibling_coherence.json`
-
-## Parameter Reference
-
-CLI parameters currently exposed:
-
-- `--input`: path to input CSV.
-- `--output`: output directory for artifacts/logs.
-- `--high-sim`: cosine threshold for direct post-to-claim mapping.
-- `--min-year`: drop posts before this year.
-- `--llm-provider`: `openai` or `openrouter`.
-- `--llm-model`: model name sent to provider endpoint.
-- `--llm-api-url`: optional chat completions URL override.
-- `--llm-api-key-env`: optional env var name override for API key lookup.
-- `--llm-timeout-s`: request timeout per LLM call (seconds).
-- `--llm-max-retries`: request retries on transport/non-200 failures.
-- `--llm-max-parse-attempts`: retries when LLM output JSON is invalid.
-- `--llm-trace-mode`: `off`, `compact`, or `full` trace logging.
-- `--llm-trace-max-chars`: max prompt/response chars stored in compact trace.
-- `--review-max-examples`: sampled proposals shown to final-review LLM per cluster.
-- `--review-max-post-chars`: max chars per sampled post text in review prompt.
-- `--proposal-pool-trigger-size`: trigger a review/apply batch when pending proposal backlog reaches this size.
-- `--disable-llm`: disable LLM and use fallback behavior.
-- `--window`: time window unit (`month`, `quarter`, or `year`).
-- `--root-topic`: root-topic string used for root node naming and proposal/review prompts.
-
-Additional tunables not currently on CLI (edit in `claimtaxo/config.py`):
-
-- `min_year`: drop posts before this year.
-- `max_post_words`: truncate text length by word count.
-- `min_cluster_size_review`, `min_cluster_size_hdbscan`: clustering/review gates.
-- `min_cohesion`, `min_time_compactness`: quality filters for reviewable clusters.
-- `temporal_w_sem`, `temporal_w_time`: weights for temporal-aware distance.
-- `embedding.model_name`, `embedding.batch_size`: embedding backend settings.

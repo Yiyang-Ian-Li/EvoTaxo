@@ -43,7 +43,7 @@ class LLMConfig:
 @dataclass
 class PipelineConfig:
     # Input CSV path.
-    input_path: str = "data/opiates_claimtaxo_input_5labels_ge0.8.csv"
+    input_path: str = "data/input.csv"
     # Output directory for all artifacts.
     output_dir: str = "results/opiates"
     # Column names and filter for selecting working rows.
@@ -64,8 +64,6 @@ class PipelineConfig:
 
     # Time window unit.
     window_unit: str = "year"  # month | quarter | year
-    # Direct map threshold for post->subtopic cosine similarity.
-    high_sim_threshold: float = 0.7
 
     # Cluster quality gates and HDBSCAN settings.
     min_cluster_size_review: int = 10

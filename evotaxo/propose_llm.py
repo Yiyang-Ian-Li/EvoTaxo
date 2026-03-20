@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from action_schema import normalize_proposal_action
-from llm import LLMClient
-from llm_json import ask_json_with_retries
-from prompts import build_propose_post_prompt, taxonomy_context
-from taxonomy import Taxonomy
+from .action_schema import normalize_proposal_action
+from .llm import LLMClient
+from .llm_json import ask_json_with_retries
+from .prompts import build_propose_post_prompt, taxonomy_context
+from .taxonomy import Taxonomy
 
 
 def _parse_proposal_actions(payload: Dict[str, Any], taxonomy: Taxonomy) -> tuple[List[Dict[str, Any]], bool]:

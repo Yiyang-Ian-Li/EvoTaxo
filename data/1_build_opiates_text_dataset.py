@@ -48,9 +48,9 @@ URL_PATTERN = re.compile(r"https?://\S+", re.IGNORECASE)
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Build filtered text-only dataset from opiates subreddit dumps."
+        description="Build a filtered text-only EvoTaxo dataset from subreddit dumps."
     )
-    parser.add_argument("--input-dir", default="../reddit/subreddits24")
+    parser.add_argument("--input-dir", default="data/raw")
     parser.add_argument("--subreddit", default="opiates")
     parser.add_argument("--output", default="data/opiates_text_filtered.csv")
     parser.add_argument("--start-date", default="2014-01-01")

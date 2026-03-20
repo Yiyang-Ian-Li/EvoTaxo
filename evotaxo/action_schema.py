@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional, Tuple
 
-from taxonomy import Taxonomy
+from .taxonomy import Taxonomy
 
 
 ALLOWED_ACTIONS = {"add_child", "add_path", "update_cmb", "set_node", "skip_post"}

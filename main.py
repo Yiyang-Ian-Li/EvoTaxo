@@ -1,4 +1,4 @@
-from claimtaxo.pipeline import main as pipeline_main
+from evotaxo.pipeline import main as pipeline_main
 
 
 def main():

@@ -1,4 +1,4 @@
-# ClaimTaxo V2 Specification
+# EvoTaxo Specification
 
 ## 1) Goal
 Build a time-evolving taxonomy where:
@@ -19,7 +19,7 @@ Build a time-evolving taxonomy where:
 2. Chronological processing
 - Sort posts by timestamp and process sequentially.
 - For each post:
-  - map to existing subtopic node only if similarity >= `high_sim_threshold`.
+  - all posts go through action proposal; there is no direct similarity-based assignment shortcut.
   - otherwise call LLM to propose zero or more structured actions.
   - if post is meaningless/noise, LLM can emit `skip_post`.
 - Store proposals in persistent action backlog; do not mutate taxonomy here.
@@ -74,8 +74,8 @@ Build a time-evolving taxonomy where:
   "window_id": "2024-03",
   "node_id_at_time": "uuid|null",
   "canonical_node_id": "uuid|null",
-  "similarity": 0.87,
-  "mapping_mode": "direct_high_sim|unmapped|post_apply_remap"
+  "similarity": null,
+  "mapping_mode": "unmapped|llm_set_node|post_apply_remap"
 }
 ```
 
@@ -260,7 +260,7 @@ LLM output must be strict JSON:
 
 ## 8) Module Layout (proposed)
 
-Under `claimtaxo/`:
+Under `evotaxo/`:
 - `config.py`: thresholds + window/clustering settings.
 - `models.py`: dataclasses/pydantic models above.
 - `mapping.py`: subtopic-node mapping and assignment logging.
@@ -299,7 +299,7 @@ Under `claimtaxo/`:
 ## 10) Immediate Open Decisions
 
 1. Mapping strictness:
-- exact value of `high_sim_threshold` (default `0.9` in current implementation).
+- no direct similarity threshold is used in the public pipeline.
 
 2. Backlog aging:
 - should stale proposals auto-expire after `K` windows?

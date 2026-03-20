@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from llm import LLMClient
-from utils import parse_json_object
+from .llm import LLMClient
+from .utils import parse_json_object
 
 
 def ask_json_with_retries(

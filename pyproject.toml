@@ -1,8 +1,9 @@
 [project]
-name = "claimtaxo"
+name = "evotaxo"
 version = "0.1.0"
-description = "Add your description here"
+description = "Action-based taxonomy evolution for time-ordered text streams."
 readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.12"
 dependencies = [
     "hdbscan>=0.8.41",

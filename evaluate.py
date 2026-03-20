@@ -23,7 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Evaluate taxonomy with NLIV, post-leaf confidence, path granularity, sibling coherence, and sibling separability."
     )
     src = p.add_mutually_exclusive_group(required=True)
-    src.add_argument("--run-dir", help="ClaimTaxo run directory containing taxonomy_nodes_final.json")
+    src.add_argument("--run-dir", help="EvoTaxo run directory containing taxonomy_nodes_final.json")
     src.add_argument("--taxonomy-json", help="Path to taxonomy_nodes_final.json")
     p.add_argument("--input-csv", help="Optional input CSV for post-level metrics; auto-resolved from run-dir when possible")
     p.add_argument("--output-dir", default="metrics", help="Directory for metric outputs")

@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass
 from typing import Dict
 
-from utils import JsonlSink
+from .utils import JsonlSink
 
 
 class AssignmentSink:

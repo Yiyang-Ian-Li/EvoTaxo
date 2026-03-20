@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 
 from openai import OpenAI
 
-from config import LLMConfig
+from .config import LLMConfig
 
 DEFAULT_OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 DEFAULT_OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -16,7 +16,7 @@ DEFAULT_OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 class LLMClient:
     def __init__(self, cfg: LLMConfig):
         self.cfg = cfg
-        self.logger = logging.getLogger("claimtaxo_v2")
+        self.logger = logging.getLogger("evotaxo")
         self.provider = (cfg.provider or "openai").strip().lower()
         self.openai_client: Optional[OpenAI] = None
         self.api_key = os.getenv(cfg.api_key_env) if cfg.api_key_env else None

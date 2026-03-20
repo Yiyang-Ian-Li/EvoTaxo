@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pandas as pd
 
-from config import PipelineConfig
-from utils import safe_text
+from .config import PipelineConfig
+from .utils import safe_text
 
 
 def _window_period_code(window_unit: str) -> str:

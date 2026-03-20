@@ -9,17 +9,17 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from action_schema import validate_refined_action_executable
-from apply_ops import apply_refined_actions
-from cluster import cluster_group, group_key, semantic_text
-from config import PipelineConfig
-from embeddings import Embedder
-from io_sinks import RunSinks
-from llm import LLMClient
-from propose_llm import propose_post_actions
-from review_llm import repair_final_action_candidate, review_action_cluster, review_final_action_pool
-from taxonomy import Taxonomy
-from utils import now_ts
+from .action_schema import validate_refined_action_executable
+from .apply_ops import apply_refined_actions
+from .cluster import cluster_group, group_key, semantic_text
+from .config import PipelineConfig
+from .embeddings import Embedder
+from .io_sinks import RunSinks
+from .llm import LLMClient
+from .propose_llm import propose_post_actions
+from .review_llm import repair_final_action_candidate, review_action_cluster, review_final_action_pool
+from .taxonomy import Taxonomy
+from .utils import now_ts
 
 
 def is_high_quality(cluster_row: Dict[str, Any], cfg: PipelineConfig) -> bool:
@@ -144,17 +144,13 @@ def process_windows(
     windows = list(df["window_id"].drop_duplicates())
     logger.info("Processing posts=%d with review triggered at window boundaries", len(df))
     ordered_df = df.sort_values(cfg.timestamp_col).reset_index(drop=True)
-    post_vecs = embedder.encode(ordered_df["_text"].tolist()) if len(ordered_df) else np.zeros((0, 1))
     proposal_map: Dict[str, Dict[str, Any]] = {}
     batch_counter = 0
-    mapped_direct_total = 0
     proposal_post_total = 0
     skip_post_total = 0
     set_node_total = 0
     new_props_total = 0
 
-    subtopic_ids: List[str] = []
-    subtopic_vecs = np.zeros((0, 1))
     taxonomy_ctx_cached: Optional[Dict[str, Any]] = _proposal_taxonomy_context(taxonomy) if llm.available() else None
     taxonomy_dirty = True
 
@@ -163,14 +159,8 @@ def process_windows(
         row["ts"] = now_ts()
         sinks.action_proposals.append(row)
 
-    def _refresh_subtopic_cache() -> None:
-        nonlocal subtopic_ids, subtopic_vecs, taxonomy_ctx_cached, taxonomy_dirty
-        subtopic_ids = taxonomy.subtopic_node_ids()
-        if subtopic_ids:
-            subtopic_texts = [taxonomy.node_text(x) for x in subtopic_ids]
-            subtopic_vecs = embedder.encode(subtopic_texts)
-        else:
-            subtopic_vecs = np.zeros((0, 1))
+    def _refresh_taxonomy_cache() -> None:
+        nonlocal taxonomy_ctx_cached, taxonomy_dirty
         taxonomy_ctx_cached = _proposal_taxonomy_context(taxonomy) if llm.available() else None
         taxonomy_dirty = False
 
@@ -579,13 +569,13 @@ def process_windows(
         )
 
     if taxonomy_dirty:
-        _refresh_subtopic_cache()
+        _refresh_taxonomy_cache()
 
     pbar = tqdm(ordered_df.iterrows(), total=len(ordered_df), desc="posts", leave=False)
     last_window_id = windows[0] if windows else "INIT"
     for row_idx, row in pbar:
         if taxonomy_dirty:
-            _refresh_subtopic_cache()
+            _refresh_taxonomy_cache()
 
         post_id = str(row[cfg.id_col])
         text = row["_text"]
@@ -597,51 +587,6 @@ def process_windows(
             batch_id = f"batch_{batch_counter:04d}"
             _run_review_batch(batch_id=batch_id, last_window_id=last_window_id)
             last_window_id = window_id
-
-        if len(subtopic_ids) and subtopic_vecs.shape[0] > 0:
-            vec = post_vecs[row_idx : row_idx + 1]
-            sims = (vec @ subtopic_vecs.T) / (
-                (np.linalg.norm(vec, axis=1, keepdims=True) + 1e-12)
-                * (np.linalg.norm(subtopic_vecs, axis=1, keepdims=True).T + 1e-12)
-            )
-            best_idx = int(np.argmax(sims, axis=1)[0])
-            best_sim = float(np.max(sims, axis=1)[0])
-            best_node_id = subtopic_ids[best_idx] if 0 <= best_idx < len(subtopic_ids) else None
-        else:
-            best_idx = -1
-            best_sim = 0.0
-            best_node_id = None
-
-        if best_idx >= 0 and best_sim >= cfg.high_sim_threshold:
-            mapped_direct_total += 1
-            sinks.assignment.append(
-                {
-                    "post_id": post_id,
-                    "timestamp": ts_iso,
-                    "window_id": window_id,
-                    "node_id_at_time": best_node_id,
-                    "canonical_node_id": best_node_id,
-                    "similarity": round(best_sim, 6),
-                    "mapping_mode": "direct_high_sim",
-                }
-            )
-            node_post_links.append(
-                {
-                    "post_id": post_id,
-                    "node_id": best_node_id,
-                    "timestamp": ts_iso,
-                    "window_id": window_id,
-                    "source": "direct_high_sim",
-                }
-            )
-            pbar.set_postfix(
-                mapped=mapped_direct_total,
-                set_node_posts=set_node_total,
-                skip_posts=skip_post_total,
-                proposal_posts=proposal_post_total,
-                pending_props=_pending_structural_count(),
-            )
-            continue
 
         actions = propose_post_actions(
             llm=llm,
@@ -697,7 +642,7 @@ def process_windows(
                             "window_id": window_id,
                             "node_id_at_time": target_node_id,
                             "canonical_node_id": target_node_id,
-                            "similarity": round(best_sim, 6),
+                            "similarity": None,
                             "mapping_mode": "llm_set_node",
                         }
                     )
@@ -723,7 +668,7 @@ def process_windows(
                     "window_id": window_id,
                     "node_id_at_time": None,
                     "canonical_node_id": None,
-                    "similarity": round(best_sim, 6),
+                    "similarity": None,
                     "mapping_mode": "unmapped",
                 }
             )
@@ -734,7 +679,6 @@ def process_windows(
         else:
             proposal_post_total += 1
         pbar.set_postfix(
-            mapped=mapped_direct_total,
             set_node_posts=set_node_total,
             skip_posts=skip_post_total,
             proposal_posts=proposal_post_total,
@@ -748,8 +692,7 @@ def process_windows(
         _run_review_batch(batch_id=batch_id, last_window_id=last_window_id)
 
     logger.info(
-        "Done processing posts. mapped_direct=%d set_node_posts=%d skip_posts=%d proposal_posts=%d proposals=%d pending=%d batches=%d",
-        mapped_direct_total,
+        "Done processing posts. set_node_posts=%d skip_posts=%d proposal_posts=%d proposals=%d pending=%d batches=%d",
         set_node_total,
         skip_post_total,
         proposal_post_total,

@@ -6,7 +6,7 @@ analysis/
 
 # Data files
 results/
-data/
+data_/
 *.csv
 *.html
 *.sh

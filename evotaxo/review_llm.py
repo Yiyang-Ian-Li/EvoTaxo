@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from action_schema import normalize_refined_action
-from llm import LLMClient
-from llm_json import ask_json_with_retries
-from prompts import (
+from .action_schema import normalize_refined_action
+from .llm import LLMClient
+from .llm_json import ask_json_with_retries
+from .prompts import (
     build_final_review_prompt,
     build_initial_taxonomy_prompt,
     build_repair_prompt,
     build_review_cluster_prompt,
     taxonomy_context,
 )
-from taxonomy import Taxonomy
+from .taxonomy import Taxonomy
 
 
 ALLOWED_REVIEW_ACTIONS = {"add_child", "add_path", "update_cmb"}

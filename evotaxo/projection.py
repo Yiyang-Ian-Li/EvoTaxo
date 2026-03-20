@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any, Dict, List
 
-from taxonomy import Taxonomy
+from .taxonomy import Taxonomy
 
 
 def build_window_taxonomy_views(

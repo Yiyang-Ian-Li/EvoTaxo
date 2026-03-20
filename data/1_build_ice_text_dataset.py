@@ -9,16 +9,16 @@ import pandas as pd
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Build ClaimTaxo-ready ICE dataset from posts/comments JSONL."
+        description="Build an EvoTaxo-ready ICE dataset from posts/comments JSONL."
     )
     p.add_argument(
         "--posts",
-        default="/home/yli62/Documents/r_ICE_Raids_posts.jsonl",
+        default="data/raw/r_ICE_Raids_posts.jsonl",
         help="Path to posts JSONL file.",
     )
     p.add_argument(
         "--comments",
-        default="/home/yli62/Documents/r_ICE_Raids_comments.jsonl",
+        default="data/raw/r_ICE_Raids_comments.jsonl",
         help="Path to comments JSONL file.",
     )
     p.add_argument("--output", default="data/ice_raids_text_structured.csv")
