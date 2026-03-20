@@ -106,27 +106,16 @@ def _taxonomy_nested_snapshot(taxonomy: Taxonomy) -> Dict[str, Any]:
             "name": t.name,
             "definition": t.cmb.definition,
             "subtopics": [],
-            "claims": [],
         }
         subtopic_ids = [cid for cid in t.children if cid in taxonomy.nodes and taxonomy.nodes[cid].level == "subtopic"]
         for sid in sorted(subtopic_ids, key=lambda x: (taxonomy.nodes[x].name.lower(), x)):
             s = taxonomy.nodes[sid]
-            claim_ids = [cid for cid in s.children if cid in taxonomy.nodes and taxonomy.nodes[cid].level == "claim"]
             topic_row["subtopics"].append(
                 {
                     "name": s.name,
                     "definition": s.cmb.definition,
-                    "claims": [
-                        {"name": taxonomy.nodes[cid].name, "definition": taxonomy.nodes[cid].cmb.definition}
-                        for cid in sorted(claim_ids, key=lambda x: (taxonomy.nodes[x].name.lower(), x))
-                    ],
                 }
             )
-        direct_claim_ids = [cid for cid in t.children if cid in taxonomy.nodes and taxonomy.nodes[cid].level == "claim"]
-        topic_row["claims"] = [
-            {"name": taxonomy.nodes[cid].name, "definition": taxonomy.nodes[cid].cmb.definition}
-            for cid in sorted(direct_claim_ids, key=lambda x: (taxonomy.nodes[x].name.lower(), x))
-        ]
         topics.append(topic_row)
     return {"root": {"name": root.name, "topics": topics}}
 
@@ -153,20 +142,19 @@ def process_windows(
     pending_ids: set[str] = set()
 
     windows = list(df["window_id"].drop_duplicates())
-    review_interval = max(1, int(cfg.review_batch_every_n_posts))
-    logger.info("Processing posts=%d with review interval every %d new posts", len(df), review_interval)
+    logger.info("Processing posts=%d with review triggered at window boundaries", len(df))
     ordered_df = df.sort_values(cfg.timestamp_col).reset_index(drop=True)
     post_vecs = embedder.encode(ordered_df["_text"].tolist()) if len(ordered_df) else np.zeros((0, 1))
     proposal_map: Dict[str, Dict[str, Any]] = {}
     batch_counter = 0
     mapped_direct_total = 0
-    unmapped_total = 0
-    set_node_total = 0
+    proposal_post_total = 0
     skip_post_total = 0
+    set_node_total = 0
     new_props_total = 0
 
-    claim_ids: List[str] = []
-    claim_vecs = np.zeros((0, 1))
+    subtopic_ids: List[str] = []
+    subtopic_vecs = np.zeros((0, 1))
     taxonomy_ctx_cached: Optional[Dict[str, Any]] = _proposal_taxonomy_context(taxonomy) if llm.available() else None
     taxonomy_dirty = True
 
@@ -175,23 +163,16 @@ def process_windows(
         row["ts"] = now_ts()
         sinks.action_proposals.append(row)
 
-    def _refresh_claim_cache() -> None:
-        nonlocal claim_ids, claim_vecs, taxonomy_ctx_cached, taxonomy_dirty
-        claim_ids = taxonomy.claim_node_ids()
-        if claim_ids:
-            claim_texts = [taxonomy.node_text(x) for x in claim_ids]
-            claim_vecs = embedder.encode(claim_texts)
+    def _refresh_subtopic_cache() -> None:
+        nonlocal subtopic_ids, subtopic_vecs, taxonomy_ctx_cached, taxonomy_dirty
+        subtopic_ids = taxonomy.subtopic_node_ids()
+        if subtopic_ids:
+            subtopic_texts = [taxonomy.node_text(x) for x in subtopic_ids]
+            subtopic_vecs = embedder.encode(subtopic_texts)
         else:
-            claim_vecs = np.zeros((0, 1))
+            subtopic_vecs = np.zeros((0, 1))
         taxonomy_ctx_cached = _proposal_taxonomy_context(taxonomy) if llm.available() else None
         taxonomy_dirty = False
-
-    def _proposal_to_action(p: Dict[str, Any]) -> Dict[str, Any]:
-        return {
-            "action_type": p.get("action_type"),
-            "objective_node_id": p.get("objective_node_id"),
-            "semantic_payload": {},
-        }
 
     def _pending_structural_count() -> int:
         return sum(
@@ -206,20 +187,9 @@ def process_windows(
         if not pending_records:
             return
 
-        direct_records = [p for p in pending_records if p.get("action_type") in {"set_node", "skip_post"}]
+        direct_records = [p for p in pending_records if p.get("action_type") == "skip_post"]
         applied_direct_ids: set[str] = set()
         for rec in direct_records:
-            action = _proposal_to_action(rec)
-            apply_refined_actions(
-                taxonomy=taxonomy,
-                refined_actions=[action],
-                cluster_proposals=[rec],
-                window_id=str(rec.get("window_id", last_window_id)),
-                assignment_rows=sinks.assignment,
-                node_post_links=node_post_links,
-                logger=logger,
-                taxonomy_updates=None,
-            )
             applied_direct_ids.add(str(rec["proposal_id"]))
             proposal_map[str(rec["proposal_id"])]["status"] = "applied"
         for pid in applied_direct_ids:
@@ -609,32 +579,34 @@ def process_windows(
         )
 
     if taxonomy_dirty:
-        _refresh_claim_cache()
+        _refresh_subtopic_cache()
 
     pbar = tqdm(ordered_df.iterrows(), total=len(ordered_df), desc="posts", leave=False)
-    posts_since_last_batch = 0
     last_window_id = windows[0] if windows else "INIT"
     for row_idx, row in pbar:
         if taxonomy_dirty:
-            _refresh_claim_cache()
+            _refresh_subtopic_cache()
 
         post_id = str(row[cfg.id_col])
         text = row["_text"]
         ts = row[cfg.timestamp_col]
         ts_iso = ts.isoformat()
         window_id = str(row["window_id"])
-        last_window_id = window_id
-        posts_since_last_batch += 1
+        if window_id != last_window_id:
+            batch_counter += 1
+            batch_id = f"batch_{batch_counter:04d}"
+            _run_review_batch(batch_id=batch_id, last_window_id=last_window_id)
+            last_window_id = window_id
 
-        if len(claim_ids) and claim_vecs.shape[0] > 0:
+        if len(subtopic_ids) and subtopic_vecs.shape[0] > 0:
             vec = post_vecs[row_idx : row_idx + 1]
-            sims = (vec @ claim_vecs.T) / (
+            sims = (vec @ subtopic_vecs.T) / (
                 (np.linalg.norm(vec, axis=1, keepdims=True) + 1e-12)
-                * (np.linalg.norm(claim_vecs, axis=1, keepdims=True).T + 1e-12)
+                * (np.linalg.norm(subtopic_vecs, axis=1, keepdims=True).T + 1e-12)
             )
             best_idx = int(np.argmax(sims, axis=1)[0])
             best_sim = float(np.max(sims, axis=1)[0])
-            best_node_id = claim_ids[best_idx] if 0 <= best_idx < len(claim_ids) else None
+            best_node_id = subtopic_ids[best_idx] if 0 <= best_idx < len(subtopic_ids) else None
         else:
             best_idx = -1
             best_sim = 0.0
@@ -664,13 +636,13 @@ def process_windows(
             )
             pbar.set_postfix(
                 mapped=mapped_direct_total,
-                pending=_pending_structural_count(),
-                set_node=set_node_total,
-                skip_post=skip_post_total,
+                set_node_posts=set_node_total,
+                skip_posts=skip_post_total,
+                proposal_posts=proposal_post_total,
+                pending_props=_pending_structural_count(),
             )
             continue
 
-        unmapped_total += 1
         actions = propose_post_actions(
             llm=llm,
             taxonomy=taxonomy,
@@ -682,13 +654,13 @@ def process_windows(
             taxonomy_ctx=taxonomy_ctx_cached,
         )
 
-        has_applied_set_node = False
+        applied_set_node = False
+        has_skip_post = any(str(a.get("action_type", "")).strip() == "skip_post" for a in actions)
+        has_structural_proposal = any(
+            str(a.get("action_type", "")).strip() in {"add_child", "add_path", "update_cmb"} for a in actions
+        )
         for a in actions:
             action_type = str(a.get("action_type", ""))
-            if action_type == "set_node":
-                set_node_total += 1
-            elif action_type == "skip_post":
-                skip_post_total += 1
 
             pid = str(uuid.uuid4())
             record = {
@@ -711,27 +683,39 @@ def process_windows(
             new_props_total += 1
             _append_proposal_log(record)
 
-            if record["action_type"] == "set_node":
-                objective_node_id = record.get("objective_node_id")
-                set_node_valid = objective_node_id in taxonomy.nodes and objective_node_id != taxonomy.root_id if objective_node_id is not None else False
-                apply_refined_actions(
-                    taxonomy=taxonomy,
-                    refined_actions=[_proposal_to_action(record)],
-                    cluster_proposals=[record],
-                    window_id=window_id,
-                    assignment_rows=sinks.assignment,
-                    node_post_links=node_post_links,
-                    logger=logger,
-                    taxonomy_updates=None,
-                    log_set_node=False,
-                )
-                record["status"] = "applied" if set_node_valid else "rejected"
-                if record["status"] == "applied":
-                    has_applied_set_node = True
+            if record["action_type"] == "skip_post":
+                record["status"] = "applied"
+            elif record["action_type"] == "set_node":
+                target_node_id = record.get("objective_node_id")
+                if target_node_id in taxonomy.nodes and taxonomy.nodes[target_node_id].level in {"topic", "subtopic"}:
+                    record["status"] = "applied"
+                    applied_set_node = True
+                    sinks.assignment.append(
+                        {
+                            "post_id": post_id,
+                            "timestamp": ts_iso,
+                            "window_id": window_id,
+                            "node_id_at_time": target_node_id,
+                            "canonical_node_id": target_node_id,
+                            "similarity": round(best_sim, 6),
+                            "mapping_mode": "llm_set_node",
+                        }
+                    )
+                    node_post_links.append(
+                        {
+                            "post_id": post_id,
+                            "node_id": target_node_id,
+                            "timestamp": ts_iso,
+                            "window_id": window_id,
+                            "source": "llm_set_node",
+                        }
+                    )
+                else:
+                    record["status"] = "rejected"
             else:
                 pending_ids.add(pid)
 
-        if not has_applied_set_node:
+        if not applied_set_node:
             sinks.assignment.append(
                 {
                     "post_id": post_id,
@@ -743,29 +727,32 @@ def process_windows(
                     "mapping_mode": "unmapped",
                 }
             )
+        if applied_set_node:
+            set_node_total += 1
+        elif has_skip_post and not has_structural_proposal:
+            skip_post_total += 1
+        else:
+            proposal_post_total += 1
         pbar.set_postfix(
             mapped=mapped_direct_total,
-            pending=_pending_structural_count(),
-            set_node=set_node_total,
-            skip_post=skip_post_total,
+            set_node_posts=set_node_total,
+            skip_posts=skip_post_total,
+            proposal_posts=proposal_post_total,
+            pending_props=_pending_structural_count(),
         )
-
-        if posts_since_last_batch >= review_interval:
-            batch_counter += 1
-            batch_id = f"batch_{batch_counter:04d}"
-            _run_review_batch(batch_id=batch_id, last_window_id=last_window_id)
-            posts_since_last_batch = 0
     pbar.close()
 
-    if pending_ids:
+    if windows:
         batch_counter += 1
         batch_id = f"batch_{batch_counter:04d}"
         _run_review_batch(batch_id=batch_id, last_window_id=last_window_id)
 
     logger.info(
-        "Done processing posts. mapped_direct=%d unmapped=%d proposals=%d pending=%d batches=%d",
+        "Done processing posts. mapped_direct=%d set_node_posts=%d skip_posts=%d proposal_posts=%d proposals=%d pending=%d batches=%d",
         mapped_direct_total,
-        unmapped_total,
+        set_node_total,
+        skip_post_total,
+        proposal_post_total,
         new_props_total,
         len(pending_ids),
         batch_counter,

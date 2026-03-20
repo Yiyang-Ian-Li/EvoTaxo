@@ -7,6 +7,7 @@ from llm import LLMClient
 from llm_json import ask_json_with_retries
 from prompts import (
     build_final_review_prompt,
+    build_initial_taxonomy_prompt,
     build_repair_prompt,
     build_review_cluster_prompt,
     taxonomy_context,
@@ -15,6 +16,44 @@ from taxonomy import Taxonomy
 
 
 ALLOWED_REVIEW_ACTIONS = {"add_child", "add_path", "update_cmb"}
+ALLOWED_BOOTSTRAP_ACTIONS = {"add_child", "add_path"}
+
+
+def generate_initial_taxonomy_actions(
+    llm: LLMClient,
+    taxonomy: Taxonomy,
+    root_topic: str,
+    max_parse_attempts: int,
+    model_override: Optional[str] = None,
+) -> Dict[str, Any]:
+    if not llm.available():
+        return {"refined_actions": [], "reason": "llm_unavailable"}
+
+    prompt = build_initial_taxonomy_prompt(
+        root_topic=root_topic,
+        taxonomy_ctx=taxonomy_context(taxonomy, max_nodes=None),
+    )
+    system = "You are a taxonomy bootstrap planner. Return valid JSON only."
+    payload = ask_json_with_retries(
+        llm,
+        prompt,
+        system,
+        max_parse_attempts=max_parse_attempts,
+        model_override=model_override,
+    )
+    if not payload:
+        return {"refined_actions": [], "reason": "parse_fail"}
+
+    refined_actions = []
+    for item in payload.get("refined_actions", []):
+        norm = normalize_refined_action(item)
+        if norm is not None and str(norm.get("action_type", "")) in ALLOWED_BOOTSTRAP_ACTIONS:
+            refined_actions.append(norm)
+
+    return {
+        "refined_actions": refined_actions,
+        "reason": str(payload.get("reason", "")).strip(),
+    }
 
 
 def _sample_proposals_for_review(

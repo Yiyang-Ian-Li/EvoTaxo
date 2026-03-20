@@ -5,8 +5,8 @@ from typing import Any, Dict, Optional, Tuple
 from taxonomy import Taxonomy
 
 
-ALLOWED_ACTIONS = {"set_node", "add_child", "add_path", "update_cmb", "skip_post"}
-ALLOWED_LEVELS = {"topic", "subtopic", "claim"}
+ALLOWED_ACTIONS = {"add_child", "add_path", "update_cmb", "set_node", "skip_post"}
+ALLOWED_LEVELS = {"topic", "subtopic"}
 
 
 def normalize_cmb(value: Any) -> Dict[str, Any]:
@@ -42,7 +42,7 @@ def normalize_refined_action(raw: Any) -> Optional[Dict[str, Any]]:
     if action_type == "add_child":
         if not isinstance(sem, dict):
             sem = {}
-        level = str(sem.get("child_level", "claim")).strip().lower()
+        level = str(sem.get("child_level", "subtopic")).strip().lower()
         if level not in ALLOWED_LEVELS:
             return None
         child_name = str(sem.get("child_name", "")).strip()
@@ -64,7 +64,7 @@ def normalize_refined_action(raw: Any) -> Optional[Dict[str, Any]]:
                     continue
                 name = str(item.get("name", "")).strip()
                 level = str(item.get("level", "")).strip().lower()
-                if not name or level not in {"topic", "subtopic", "claim"}:
+                if not name or level not in ALLOWED_LEVELS:
                     continue
                 out_nodes.append(
                     {
@@ -74,13 +74,15 @@ def normalize_refined_action(raw: Any) -> Optional[Dict[str, Any]]:
                     }
                 )
         levels = [x["level"] for x in out_nodes]
-        if levels not in (["topic", "subtopic"], ["subtopic", "claim"], ["topic", "subtopic", "claim"]):
+        if levels != ["topic", "subtopic"]:
             return None
         normalized["semantic_payload"] = {"nodes": out_nodes}
     elif action_type == "update_cmb":
         if not isinstance(sem, dict):
             sem = {}
         normalized["semantic_payload"] = {"new_cmb": normalize_cmb(sem.get("new_cmb", {}))}
+    elif action_type == "set_node":
+        normalized["semantic_payload"] = {}
     return normalized
 
 
@@ -136,8 +138,8 @@ def validate_refined_action_executable(
         return False, "objective_node_not_found"
 
     if action_type == "set_node":
-        if objective_node_id == taxonomy.root_id:
-            return False, "set_node_on_root_not_allowed"
+        if taxonomy.nodes[objective_node_id].level not in {"topic", "subtopic"}:
+            return False, "set_node_target_must_be_topic_or_subtopic"
         return True, ""
 
     if action_type == "update_cmb":
@@ -147,29 +149,31 @@ def validate_refined_action_executable(
 
     if action_type == "add_child":
         child_name = str(sem.get("child_name", "")).strip()
-        child_level = str(sem.get("child_level", "claim")).strip().lower()
+        child_level = str(sem.get("child_level", "subtopic")).strip().lower()
         if not child_name:
             return False, "missing_child_name"
         if child_level not in ALLOWED_LEVELS:
             return False, "invalid_child_level"
+        parent_level = taxonomy.nodes[objective_node_id].level
+        if parent_level == "root" and child_level != "topic":
+            return False, "invalid_child_level_for_root"
+        if parent_level == "topic" and child_level != "subtopic":
+            return False, "invalid_child_level_for_topic"
+        if parent_level not in {"root", "topic"}:
+            return False, "invalid_parent_level_for_add_child"
         return True, ""
 
     if action_type == "add_path":
         anchor_level = taxonomy.nodes[objective_node_id].level
-        if anchor_level not in {"root", "topic"}:
+        if anchor_level != "root":
             return False, "invalid_anchor_level"
         nodes = sem.get("nodes", [])
-        if not isinstance(nodes, list) or len(nodes) not in {2, 3}:
+        if not isinstance(nodes, list) or len(nodes) != 2:
             return False, "invalid_path_length"
         if not all(isinstance(x, dict) for x in nodes):
             return False, "invalid_path_nodes"
         levels = [str(x.get("level", "")).strip().lower() for x in nodes]
-        allowed_levels = (
-            (["topic", "subtopic"], anchor_level == "root"),
-            (["topic", "subtopic", "claim"], anchor_level == "root"),
-            (["subtopic", "claim"], anchor_level == "topic"),
-        )
-        if not any(levels == lv and ok for lv, ok in allowed_levels):
+        if levels != ["topic", "subtopic"]:
             return False, "invalid_path_shape"
         names = [str(x.get("name", "")).strip() for x in nodes]
         if any(not x for x in names):

@@ -54,7 +54,8 @@ def load_nodes(path: str) -> Tuple[Dict[str, EvalNode], str]:
     with open(path, "r", encoding="utf-8") as f:
         rows = json.load(f)
     nodes: Dict[str, EvalNode] = {}
-    root_id = None
+    root_ids = []
+    named_root_id = None
     for r in rows:
         cmb = r.get("cmb", {}) or {}
         node = EvalNode(
@@ -65,10 +66,16 @@ def load_nodes(path: str) -> Tuple[Dict[str, EvalNode], str]:
             status=str(r.get("status", "active")),
         )
         nodes[node.node_id] = node
-        if node.parent_id is None and node.name.upper() == "ROOT":
-            root_id = node.node_id
+        if node.parent_id is None:
+            root_ids.append(node.node_id)
+            if node.name.upper() == "ROOT":
+                named_root_id = node.node_id
+    if len(root_ids) == 1:
+        root_id = root_ids[0]
+    else:
+        root_id = named_root_id
     if root_id is None:
-        raise ValueError("Could not find ROOT node in taxonomy.")
+        raise ValueError("Could not find root node in taxonomy.")
     return nodes, root_id
 
 
@@ -223,16 +230,18 @@ def taxonomy_paths(nodes: Dict[str, EvalNode], root_id: str) -> List[List[str]]:
     return paths
 
 
-def taxonomy_levels(nodes: Dict[str, EvalNode], root_id: str) -> List[Dict]:
+def taxonomy_levels(nodes: Dict[str, EvalNode], root_id: str, include_root: bool = False, root_topic: str = "taxonomy") -> List[Dict]:
     children = active_children(nodes)
     levels = []
     for parent_id, child_ids in children.items():
-        if parent_id == root_id or not child_ids:
+        if not child_ids:
+            continue
+        if parent_id == root_id and not include_root:
             continue
         levels.append(
             {
                 "parent_id": parent_id,
-                "parent_name": nodes[parent_id].name,
+                "parent_name": root_topic if parent_id == root_id else nodes[parent_id].name,
                 "siblings": [nodes[c].name for c in child_ids if c in nodes],
                 "child_ids": [c for c in child_ids if c in nodes],
             }

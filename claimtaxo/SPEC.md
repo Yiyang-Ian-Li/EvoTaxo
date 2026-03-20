@@ -1,7 +1,7 @@
 # ClaimTaxo V2 Specification
 
 ## 1) Goal
-Build a time-evolving claim taxonomy where:
+Build a time-evolving taxonomy where:
 - taxonomy nodes are grounded in posts,
 - unmapped posts generate structured action proposals (not immediate edits),
 - actions are clustered (semantic and temporal-aware) per window,
@@ -19,7 +19,7 @@ Build a time-evolving claim taxonomy where:
 2. Chronological processing
 - Sort posts by timestamp and process sequentially.
 - For each post:
-  - map to existing claim node only if similarity >= `high_sim_threshold`.
+  - map to existing subtopic node only if similarity >= `high_sim_threshold`.
   - otherwise call LLM to propose zero or more structured actions.
   - if post is meaningless/noise, LLM can emit `skip_post`.
 - Store proposals in persistent action backlog; do not mutate taxonomy here.
@@ -52,7 +52,7 @@ Build a time-evolving claim taxonomy where:
 {
   "node_id": "uuid",
   "name": "string",
-  "level": "topic|subtopic|claim",
+  "level": "topic|subtopic",
   "parent_id": "uuid|null",
   "children": ["uuid"],
   "status": "active|candidate|frozen",
@@ -86,7 +86,7 @@ Build a time-evolving claim taxonomy where:
   "post_id": "string",
   "timestamp": "iso8601",
   "window_id": "2024-03",
-  "action_type": "set_node|add_child|add_path|update_cmb|skip_post",
+  "action_type": "add_child|add_path|update_cmb|skip_post",
   "objective_node_id": "uuid|null",
   "action_explanation": "string",
   "post_summary": "string",
@@ -99,13 +99,12 @@ Build a time-evolving claim taxonomy where:
 ```
 
 `semantic_payload` contract by action type:
-- `set_node`: `{}` (no semantic payload)
 - `skip_post`: `{}` (no semantic payload)
 - `add_child`:
 ```json
 {
   "child_name": "string",
-  "child_level": "topic|subtopic|claim",
+  "child_level": "topic|subtopic",
   "child_cmb": {
     "definition": "string",
     "include_terms": ["string"],
@@ -127,15 +126,14 @@ Build a time-evolving claim taxonomy where:
 ```json
 {
   "nodes": [
-    {"name": "New Subtopic", "level": "subtopic", "cmb": {"definition": "...", "include_terms": [], "exclude_terms": []}},
-    {"name": "New Claim (optional)", "level": "claim", "cmb": {"definition": "...", "include_terms": [], "exclude_terms": []}}
+    {"name": "New Topic", "level": "topic", "cmb": {"definition": "...", "include_terms": [], "exclude_terms": []}},
+    {"name": "New Subtopic", "level": "subtopic", "cmb": {"definition": "...", "include_terms": [], "exclude_terms": []}}
   ]
 }
 ```
 `objective_node_id` is the anchor topic node and must already exist.
-Allowed shapes only:
-- `topic -> subtopic`
-- `topic -> subtopic -> claim`
+Allowed shape only:
+- `root -> topic -> subtopic`
 
 ## 3.4 Cluster Record
 ```json
@@ -143,7 +141,7 @@ Allowed shapes only:
   "cluster_id": "string",
   "window_id": "2024-03",
   "cluster_mode": "semantic|temporal",
-  "action_type": "set_node|add_child|add_path|update_cmb|skip_post",
+  "action_type": "add_child|add_path|update_cmb|skip_post",
   "objective_node_id": "uuid|null",
   "proposal_ids": ["uuid"],
   "size": 14,
@@ -165,14 +163,14 @@ Allowed shapes only:
   "decision": "approve|reject|defer",
   "refined_actions": [
     {
-      "action_type": "set_node|add_child|add_path|update_cmb|skip_post",
+      "action_type": "add_child|add_path|update_cmb|skip_post",
       "objective_node_id": "uuid|null",
       "semantic_payload": {}
     }
   ],
   "approved_operations": [
     {
-      "op_type": "set_node|add_child|add_path|update_cmb|skip_post",
+      "op_type": "add_child|add_path|update_cmb|skip_post",
       "payload": {}
     }
   ],
@@ -185,9 +183,8 @@ Allowed shapes only:
 ## 4) Action Types (V2 minimal set)
 
 Keep action space narrow first to reduce noisy proposals:
-- `set_node`: classify one post to an existing node.
 - `add_child`: add a child node with full CMB.
-- `add_path`: add `topic->subtopic` or `topic->subtopic->claim` from existing topic anchor.
+- `add_path`: add `root->topic->subtopic`.
 - `update_cmb`: replace/update CMB for objective node.
 - `skip_post`: explicit no-op for meaningless post.
 
@@ -198,7 +195,7 @@ Rule: every action must include:
 
 Semantic payload rule:
 - only `add_child`, `add_path`, and `update_cmb` carry semantics.
-- `set_node` and `skip_post` use empty semantic payload.
+- `skip_post` uses empty semantic payload.
 
 ---
 
@@ -266,7 +263,7 @@ LLM output must be strict JSON:
 Under `claimtaxo/`:
 - `config.py`: thresholds + window/clustering settings.
 - `models.py`: dataclasses/pydantic models above.
-- `mapping.py`: claim-node mapping and assignment logging.
+- `mapping.py`: subtopic-node mapping and assignment logging.
 - `proposer.py`: per-post LLM action proposal generation.
 - `backlog.py`: persistence and state transitions for proposals.
 - `cluster_semantic.py`: semantic clustering.

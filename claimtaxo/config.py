@@ -43,12 +43,12 @@ class LLMConfig:
 @dataclass
 class PipelineConfig:
     # Input CSV path.
-    input_path: str = "data/opiates_claimtaxo_input_5labels_ge0.75.csv"
+    input_path: str = "data/opiates_claimtaxo_input_5labels_ge0.8.csv"
     # Output directory for all artifacts.
-    output_dir: str = "results"
+    output_dir: str = "results/opiates"
     # Column names and filter for selecting working rows.
     kind_col: str = "kind"
-    kind_value: str = "submissions"
+    kind_value: str = "submissions, submission_top_comment"
     id_col: str = "id"
     text_col: str = "text"
     title_col: Optional[str] = "title"
@@ -56,13 +56,15 @@ class PipelineConfig:
     # Root topic string injected into LLM prompts.
     root_topic: str = "opiates"
     # Drop rows before this year.
-    min_year: int = 2014
-    # Truncate post text to first N words.
+    min_year: int = 2015
+    # Truncate post text to first N words.``
     max_post_words: int = 500
+    # Ask the later-stage LLM to generate an initial taxonomy under the root before post processing.
+    bootstrap_initial_taxonomy: bool = True
 
     # Time window unit.
     window_unit: str = "year"  # month | quarter | year
-    # Direct map threshold for post->claim cosine similarity.
+    # Direct map threshold for post->subtopic cosine similarity.
     high_sim_threshold: float = 0.7
 
     # Cluster quality gates and HDBSCAN settings.
@@ -75,8 +77,6 @@ class PipelineConfig:
     temporal_w_time: float = 0.5
     # Number of proposal samples shown to final-review LLM per cluster.
     review_max_examples: int = 10
-    # Trigger a review/apply cycle every N newly processed posts.
-    review_batch_every_n_posts: int = 500
 
     # Nested configs.
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)

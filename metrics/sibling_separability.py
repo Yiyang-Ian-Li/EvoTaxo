@@ -25,7 +25,7 @@ def _extract_score_1_to_5(text: str) -> float:
     return float("nan")
 
 
-def compute_sibling_coherence(
+def compute_sibling_separability(
     nodes: Dict[str, EvalNode], root_id: str, root_topic: str, llm: EvalLLMClient
 ) -> Tuple[float, List[Dict]]:
     levels = taxonomy_levels(nodes, root_id, include_root=True, root_topic=root_topic)
@@ -34,7 +34,7 @@ def compute_sibling_coherence(
 
     rows: List[Dict] = []
     valid_scores = []
-    for level in tqdm(levels, desc="Sibling Coherence"):
+    for level in tqdm(levels, desc="Sibling Separability"):
         parent = level["parent_name"]
         siblings = level["siblings"]
         if len(siblings) <= 1:
@@ -42,14 +42,14 @@ def compute_sibling_coherence(
             reasoning = "not_applicable_single_child"
         else:
             prompt = (
-                f"You are evaluating the coherence of sibling categories in a taxonomy for the domain '{root_topic}'.\n\n"
+                f"You are evaluating the separability of sibling categories in a taxonomy for the domain '{root_topic}'.\n\n"
                 f"The parent topic is: {parent}.\n\n"
                 f"The sibling categories are: '{', '.join(siblings)}'\n\n"
-                f"Score the overall coherence of this sibling set relative to the parent topic '{parent}'. "
-                "A high score means the siblings belong together naturally and operate at a similar level of specificity "
-                "and abstraction. A low score means the siblings feel mismatched, uneven, off-topic, or poorly grouped.\n\n"
-                "Use a 1-5 scale where 1 = very poor coherence, 2 = weak, 3 = mixed/acceptable, "
-                "4 = good, and 5 = excellent coherence. "
+                "Score how clearly these sibling categories are distinguishable from one another. "
+                "A high score means each sibling has a clear, non-overlapping scope and could be reliably "
+                "told apart from the others. A low score means the siblings are confusing, redundant, or "
+                "strongly overlapping. Use a 1-5 scale where 1 = very poor separability, 2 = weak, "
+                "3 = mixed/acceptable, 4 = good, and 5 = excellent separability. "
                 "Return a short rationale and an explicit machine-readable score in the form '<score: X>'."
             )
             reasoning = (llm.chat(prompt) or "").lower()

@@ -2,13 +2,15 @@
 baselines/
 references/
 test_api.py
+analysis/
 
 # Data files
 results/
-Data/
+data/
 *.csv
 *.html
 *.sh
+paper.tex
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

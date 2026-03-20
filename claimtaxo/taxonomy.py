@@ -55,8 +55,8 @@ class Taxonomy:
         )
         node.updated_at_window = window_id
 
-    def claim_node_ids(self) -> List[str]:
-        return [n.node_id for n in self.nodes.values() if n.level == "claim"]
+    def subtopic_node_ids(self) -> List[str]:
+        return [n.node_id for n in self.nodes.values() if n.level == "subtopic"]
 
     def node_text(self, node_id: str) -> str:
         n = self.nodes[node_id]

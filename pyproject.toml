@@ -27,4 +27,6 @@ dependencies = [
     "langchain>=1.2.10",
     "langchain-openai>=1.1.10",
     "langchain-community>=0.4.1",
+    "matplotlib>=3.10.8",
+    "spherecluster>=0.1.7",
 ]

@@ -14,8 +14,11 @@ from embeddings import Embedder
 from io_sinks import create_run_sinks
 from llm import LLMClient
 from projection import build_final_node_post_counts, build_window_taxonomy_views
+from review_llm import generate_initial_taxonomy_actions
 from review_loop import process_windows
 from taxonomy import Taxonomy
+from apply_ops import apply_refined_actions
+from action_schema import validate_refined_action_executable
 from utils import ensure_dir, now_ts, write_json, write_jsonl
 
 
@@ -74,11 +77,70 @@ def run_pipeline(cfg: PipelineConfig) -> None:
     )
 
     logger.info(
-        "Root-only init: taxonomy root_id=%s root_name=%s window=%s",
+        "Initialized taxonomy root: root_id=%s root_name=%s window=%s",
         taxonomy.root_id,
         taxonomy.nodes[taxonomy.root_id].name,
         first_window,
     )
+    logger.info("Bootstrap initial taxonomy enabled=%s", cfg.bootstrap_initial_taxonomy)
+
+    if cfg.bootstrap_initial_taxonomy:
+        bootstrap = generate_initial_taxonomy_actions(
+            llm=llm,
+            taxonomy=taxonomy,
+            root_topic=cfg.root_topic,
+            max_parse_attempts=cfg.llm.max_parse_attempts,
+            model_override=cfg.llm.later_stage_model,
+        )
+        valid_bootstrap_actions = []
+        for action in bootstrap.get("refined_actions", []):
+            ok, _ = validate_refined_action_executable(action, taxonomy)
+            if ok:
+                valid_bootstrap_actions.append(action)
+        if valid_bootstrap_actions:
+            apply_refined_actions(
+                taxonomy=taxonomy,
+                refined_actions=valid_bootstrap_actions,
+                cluster_proposals=[],
+                window_id=first_window,
+                assignment_rows=sinks.assignment,
+                node_post_links=[],
+                logger=logger,
+                taxonomy_updates=None,
+            )
+            logger.info(
+                "Bootstrap init applied actions=%d reason=%s model=%s",
+                len(valid_bootstrap_actions),
+                bootstrap.get("reason", ""),
+                cfg.llm.later_stage_model or cfg.llm.model,
+            )
+        else:
+            logger.info(
+                "Bootstrap init produced no valid actions reason=%s model=%s",
+                bootstrap.get("reason", ""),
+                cfg.llm.later_stage_model or cfg.llm.model,
+            )
+        write_json(
+            os.path.join(cfg.output_dir, "taxonomy_after_bootstrap.json"),
+            {
+                "generated_at": now_ts(),
+                "bootstrap_enabled": True,
+                "reason": bootstrap.get("reason", ""),
+                "node_count": len(taxonomy.nodes),
+                "taxonomy": taxonomy.to_rows(),
+            },
+        )
+    else:
+        write_json(
+            os.path.join(cfg.output_dir, "taxonomy_after_bootstrap.json"),
+            {
+                "generated_at": now_ts(),
+                "bootstrap_enabled": False,
+                "reason": "",
+                "node_count": len(taxonomy.nodes),
+                "taxonomy": taxonomy.to_rows(),
+            },
+        )
 
     loop = process_windows(
         cfg=cfg,
@@ -124,6 +186,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="ClaimTaxo MVP")
     p.add_argument("--input", default=DEFAULT_CONFIG.input_path)
     p.add_argument("--output", default=DEFAULT_CONFIG.output_dir)
+    p.add_argument("--kind-value", default=DEFAULT_CONFIG.kind_value)
     p.add_argument("--high-sim", type=float, default=DEFAULT_CONFIG.high_sim_threshold)
     p.add_argument("--min-year", type=int, default=DEFAULT_CONFIG.min_year)
     p.add_argument("--llm-provider", default=DEFAULT_CONFIG.llm.provider, choices=["openai", "openrouter"])
@@ -135,7 +198,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--llm-max-retries", type=int, default=DEFAULT_CONFIG.llm.max_retries)
     p.add_argument("--llm-max-parse-attempts", type=int, default=DEFAULT_CONFIG.llm.max_parse_attempts)
     p.add_argument("--review-max-examples", type=int, default=DEFAULT_CONFIG.review_max_examples)
-    p.add_argument("--review-batch-every-n-posts", type=int, default=DEFAULT_CONFIG.review_batch_every_n_posts)
+    p.add_argument("--bootstrap-initial-taxonomy", type=bool, default=DEFAULT_CONFIG.bootstrap_initial_taxonomy)
     p.add_argument("--disable-llm", action="store_true")
     p.add_argument("--window", default=DEFAULT_CONFIG.window_unit, choices=["month", "quarter", "year"])
     p.add_argument("--root-topic", default=DEFAULT_CONFIG.root_topic)
@@ -149,6 +212,7 @@ def main() -> None:
     cfg = DEFAULT_CONFIG
     cfg.input_path = args.input
     cfg.output_dir = resolve_output_dir(args.output)
+    cfg.kind_value = args.kind_value
     cfg.high_sim_threshold = args.high_sim
     cfg.min_year = args.min_year
     cfg.llm.provider = args.llm_provider
@@ -162,7 +226,7 @@ def main() -> None:
     cfg.llm.max_retries = args.llm_max_retries
     cfg.llm.max_parse_attempts = args.llm_max_parse_attempts
     cfg.review_max_examples = args.review_max_examples
-    cfg.review_batch_every_n_posts = args.review_batch_every_n_posts
+    cfg.bootstrap_initial_taxonomy = args.bootstrap_initial_taxonomy
     cfg.window_unit = args.window
     cfg.root_topic = args.root_topic
     if args.disable_llm:

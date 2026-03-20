@@ -12,16 +12,14 @@ from taxonomy import Taxonomy
 def _parse_proposal_actions(payload: Dict[str, Any], taxonomy: Taxonomy) -> tuple[List[Dict[str, Any]], bool]:
     out: List[Dict[str, Any]] = []
     used_root_forbidden_action = False
-    for item in payload.get("actions", []):
-        norm = normalize_proposal_action(item)
-        if norm is None:
-            continue
+    norm = normalize_proposal_action(payload)
+    if norm is not None:
         action_type = str(norm.get("action_type", ""))
         objective_node_id = str(norm.get("objective_node_id"))
-        if action_type in {"set_node", "update_cmb"} and objective_node_id == str(taxonomy.root_id):
+        if action_type == "update_cmb" and objective_node_id == str(taxonomy.root_id):
             used_root_forbidden_action = True
-            continue
-        out.append(norm)
+        else:
+            out.append(norm)
     return out, used_root_forbidden_action
 
 
@@ -73,8 +71,8 @@ def propose_post_actions(
     if used_root_forbidden_action:
         retry_prompt = (
             prompt
-            + "\n\nYour previous output used set_node/update_cmb on the root node, which is invalid."
-            + " Re-answer with valid actions only. Never use set_node or update_cmb on root."
+            + "\n\nYour previous output used update_cmb on the root node, which is invalid."
+            + " Re-answer with exactly one valid action only. Never use update_cmb on root."
         )
         retry_payload = ask_json_with_retries(
             llm,

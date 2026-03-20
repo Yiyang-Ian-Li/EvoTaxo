@@ -19,7 +19,13 @@ def _window_period_code(window_unit: str) -> str:
 
 def load_data(cfg: PipelineConfig) -> pd.DataFrame:
     df = pd.read_csv(cfg.input_path)
-    df = df[df[cfg.kind_col] == cfg.kind_value].copy()
+    raw_kind_value = cfg.kind_value
+    if isinstance(raw_kind_value, str):
+        kind_values = [part.strip() for part in raw_kind_value.split(",") if part.strip()]
+    else:
+        kind_values = [str(part).strip() for part in raw_kind_value if str(part).strip()]
+    if kind_values:
+        df = df[df[cfg.kind_col].isin(kind_values)].copy()
     df[cfg.timestamp_col] = pd.to_datetime(df[cfg.timestamp_col], errors="coerce")
     df = df.dropna(subset=[cfg.timestamp_col]).copy()
     df = df[df[cfg.timestamp_col].dt.year >= cfg.min_year].copy()

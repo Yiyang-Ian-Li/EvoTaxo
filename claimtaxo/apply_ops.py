@@ -7,7 +7,7 @@ from taxonomy import Taxonomy
 from utils import now_ts
 
 
-VALID_LEVELS = {"topic", "subtopic", "claim"}
+VALID_LEVELS = {"topic", "subtopic"}
 
 
 def apply_refined_actions(
@@ -19,7 +19,6 @@ def apply_refined_actions(
     node_post_links: List[Dict[str, Any]],
     logger: logging.Logger,
     taxonomy_updates: Any = None,
-    log_set_node: bool = True,
 ) -> None:
     proposal_post_ids = [str(x["post_id"]) for x in cluster_proposals]
     proposal_ts = {str(x["post_id"]): x.get("timestamp") for x in cluster_proposals}
@@ -28,35 +27,21 @@ def apply_refined_actions(
         action_type = action.get("action_type")
         objective_node_id = action.get("objective_node_id")
         sem = action.get("semantic_payload", {})
-        if action_type != "skip_post" and (action_type != "set_node" or log_set_node):
+        if action_type != "skip_post":
             logger.info("Applying refined action type=%s objective=%s posts=%d", action_type, objective_node_id, len(proposal_post_ids))
 
-        if action_type == "set_node":
-            if objective_node_id not in taxonomy.nodes:
-                continue
-            for pid in proposal_post_ids:
-                ts = proposal_ts.get(pid)
-                assignment_rows.append(
-                    {
-                        "post_id": pid,
-                        "timestamp": ts,
-                        "window_id": window_id,
-                        "node_id_at_time": objective_node_id,
-                        "canonical_node_id": objective_node_id,
-                        "similarity": None,
-                        "mapping_mode": "post_apply_refine",
-                    }
-                )
-                node_post_links.append(
-                    {"post_id": pid, "node_id": objective_node_id, "timestamp": ts, "window_id": window_id, "source": "set_node_refined"}
-                )
-        elif action_type == "add_child":
+        if action_type == "add_child":
             if objective_node_id not in taxonomy.nodes:
                 continue
             child_name = str(sem.get("child_name", "")).strip()
-            child_level = str(sem.get("child_level", "claim")).strip().lower()
+            child_level = str(sem.get("child_level", "subtopic")).strip().lower()
             child_cmb = sem.get("child_cmb", {})
             if not child_name or child_level not in VALID_LEVELS:
+                continue
+            parent_level = taxonomy.nodes[objective_node_id].level
+            if (parent_level == "root" and child_level != "topic") or (parent_level == "topic" and child_level != "subtopic"):
+                continue
+            if parent_level not in {"root", "topic"}:
                 continue
 
             child_id = taxonomy.add_node(parent_id=objective_node_id, name=child_name, level=child_level, cmb=child_cmb, window_id=window_id)
@@ -93,20 +78,15 @@ def apply_refined_actions(
             if objective_node_id not in taxonomy.nodes:
                 continue
             anchor_level = taxonomy.nodes[objective_node_id].level
-            if anchor_level not in {"root", "topic"}:
+            if anchor_level != "root":
                 continue
             nodes = sem.get("nodes", [])
-            if not isinstance(nodes, list) or len(nodes) not in {2, 3}:
+            if not isinstance(nodes, list) or len(nodes) != 2:
                 continue
             if not all(isinstance(x, dict) for x in nodes):
                 continue
             levels = [str(x.get("level", "")).strip().lower() for x in nodes]
-            allowed_levels = (
-                (["topic", "subtopic"], anchor_level == "root"),
-                (["topic", "subtopic", "claim"], anchor_level == "root"),
-                (["subtopic", "claim"], anchor_level == "topic"),
-            )
-            if not any(levels == lv and ok for lv, ok in allowed_levels):
+            if levels != ["topic", "subtopic"]:
                 continue
             names = [str(x.get("name", "")).strip() for x in nodes]
             if any(not x for x in names):
@@ -118,7 +98,7 @@ def apply_refined_actions(
                 next_id = taxonomy.add_node(
                     parent_id=parent,
                     name=str(item.get("name", "")).strip(),
-                    level=str(item.get("level", "claim")).strip().lower(),
+                    level=str(item.get("level", "subtopic")).strip().lower(),
                     cmb=item.get("cmb", {}),
                     window_id=window_id,
                 )

@@ -39,7 +39,14 @@ def compute_nliv(
         edges.append((parent, nid))
 
     if not edges:
-        return {"nliv_s": float("nan"), "nliv_w": float("nan"), "num_edges": 0, "num_paths": 0}, [], []
+        return {
+            "nliv_s": float("nan"),
+            "nliv_w": float("nan"),
+            "nliv_s_std": float("nan"),
+            "nliv_w_std": float("nan"),
+            "num_edges": 0,
+            "num_paths": 0,
+        }, [], []
 
     model_kwargs = {}
     if device >= 0:
@@ -131,6 +138,8 @@ def compute_nliv(
     summary = {
         "nliv_s": float(np.mean(path_s)) if path_s else float("nan"),
         "nliv_w": float(np.mean(path_w)) if path_w else float("nan"),
+        "nliv_s_std": float(np.std(path_s)) if path_s else float("nan"),
+        "nliv_w_std": float(np.std(path_w)) if path_w else float("nan"),
         "num_edges": len(edges),
         "num_paths": len(path_rows),
     }

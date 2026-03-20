@@ -10,16 +10,18 @@ from dotenv import load_dotenv
 import pandas as pd
 
 from metrics.common import ensure_dir, load_nodes, resolve_device, write_csv, write_json
-from metrics.csc import compute_csc
 from metrics.llm_client import EvalLLMClient, EvalLLMConfig
 from metrics.nliv import compute_nliv
 from metrics.path_granularity import compute_path_granularity
 from metrics.post_leaf_confidence import compute_post_leaf_confidence
 from metrics.sibling_coherence import compute_sibling_coherence
+from metrics.sibling_separability import compute_sibling_separability
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Evaluate taxonomy with CSC, NLIV, Path Granularity, Sibling Coherence.")
+    p = argparse.ArgumentParser(
+        description="Evaluate taxonomy with NLIV, post-leaf confidence, path granularity, sibling coherence, and sibling separability."
+    )
     src = p.add_mutually_exclusive_group(required=True)
     src.add_argument("--run-dir", help="ClaimTaxo run directory containing taxonomy_nodes_final.json")
     src.add_argument("--taxonomy-json", help="Path to taxonomy_nodes_final.json")
@@ -32,13 +34,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-length", type=int, default=256)
     p.add_argument("--device", choices=["auto", "cuda", "cpu"], default="auto")
     p.add_argument("--device-id", type=int, default=0)
-    p.add_argument("--include-root-edges", action="store_true")
+    p.add_argument("--include-root-edges", action="store_true", default=True)
+    p.add_argument("--exclude-root-edges", action="store_false", dest="include_root_edges")
     p.add_argument("--node-text-source", choices=["auto", "name"], default="auto")
     p.add_argument("--id-col", default="id")
     p.add_argument("--text-col", default="text")
     p.add_argument("--title-col", default="title")
     p.add_argument("--kind-col", default="kind")
     p.add_argument("--kind-value", default="submissions")
+    p.add_argument("--kind-values", nargs="+", default=None)
     p.add_argument("--timestamp-col", default="created_dt")
     p.add_argument("--min-year", type=int, default=2014)
     p.add_argument("--max-post-words", type=int, default=500)
@@ -84,7 +88,8 @@ def load_posts_for_eval(args: argparse.Namespace) -> List[str]:
         return []
     df = pd.read_csv(input_csv)
     if args.kind_col in df.columns:
-        df = df[df[args.kind_col] == args.kind_value].copy()
+        kind_values = list(args.kind_values) if args.kind_values else [args.kind_value]
+        df = df[df[args.kind_col].isin(kind_values)].copy()
     if args.timestamp_col in df.columns:
         df[args.timestamp_col] = pd.to_datetime(df[args.timestamp_col], errors="coerce")
         df = df.dropna(subset=[args.timestamp_col]).copy()
@@ -126,7 +131,6 @@ def main() -> None:
     device = resolve_device(args.device, args.device_id)
     posts = load_posts_for_eval(args)
 
-    csc = compute_csc(nodes, root_id, args.embedding_model, args.batch_size, text_source=args.node_text_source)
     nliv, edge_rows, path_rows = compute_nliv(
         nodes=nodes,
         root_id=root_id,
@@ -159,17 +163,14 @@ def main() -> None:
     if llm.available():
         path_granularity, path_granularity_rows = compute_path_granularity(nodes, root_id, args.root_topic, llm)
         sibling_coherence, sibling_coherence_rows = compute_sibling_coherence(nodes, root_id, args.root_topic, llm)
+        sibling_separability, sibling_separability_rows = compute_sibling_separability(nodes, root_id, args.root_topic, llm)
     else:
         path_granularity = float("nan")
         sibling_coherence = float("nan")
+        sibling_separability = float("nan")
         path_granularity_rows = []
         sibling_coherence_rows = []
-
-    csc_x_nliv_s = (
-        float(csc["score"] * nliv["nliv_s"])
-        if not (math.isnan(csc["score"]) or math.isnan(nliv["nliv_s"]))
-        else float("nan")
-    )
+        sibling_separability_rows = []
 
     base_meta = {
         "taxonomy_json": os.path.abspath(taxonomy_json),
@@ -181,35 +182,34 @@ def main() -> None:
         "node_text_source": args.node_text_source,
         "include_root_edges": args.include_root_edges,
         "details": {
-            "csc_num_nodes": csc["num_nodes"],
-            "csc_num_pairs": csc["num_pairs"],
             "nliv_num_edges": nliv["num_edges"],
             "nliv_num_paths": nliv["num_paths"],
             "post_leaf_num_posts": post_leaf_conf["num_posts"],
             "post_leaf_num_leaf_labels": post_leaf_conf["num_leaf_labels"],
+            "post_leaf_entropy_normalization": post_leaf_conf.get("entropy_normalization"),
+            "post_leaf_num_posts_predicted_others": post_leaf_conf.get("num_posts_predicted_others"),
             "llm_available": llm.available(),
         },
     }
 
     metrics_summary = {
-        "csc": csc["score"],
         "nliv_s": nliv["nliv_s"],
         "nliv_w": nliv["nliv_w"],
         "post_leaf_mean_entropy": post_leaf_conf["mean_entropy"],
         "post_leaf_mean_margin_top1_top2": post_leaf_conf["mean_margin_top1_top2"],
+        "post_leaf_others_ratio": post_leaf_conf["others_ratio"],
         "path_granularity": path_granularity,
         "sibling_coherence": sibling_coherence,
-        "csc_x_nliv_s": csc_x_nliv_s,
+        "sibling_separability": sibling_separability,
         "meta": base_meta,
     }
 
     write_json(os.path.join(output_dir, "taxonomy_eval_metrics.json"), metrics_summary)
-    write_metric_file(os.path.join(output_dir, "csc.json"), "CSC", csc["score"], base_meta)
     write_metric_file(os.path.join(output_dir, "nliv_s.json"), "NLIV-S", nliv["nliv_s"], base_meta)
     write_metric_file(os.path.join(output_dir, "nliv_w.json"), "NLIV-W", nliv["nliv_w"], base_meta)
     write_metric_file(
         os.path.join(output_dir, "post_leaf_mean_entropy.json"),
-        "Post Leaf Mean Entropy",
+        "Post Leaf Mean Normalized Entropy",
         post_leaf_conf["mean_entropy"],
         base_meta,
     )
@@ -219,14 +219,26 @@ def main() -> None:
         post_leaf_conf["mean_margin_top1_top2"],
         base_meta,
     )
+    write_metric_file(
+        os.path.join(output_dir, "post_leaf_others_ratio.json"),
+        "Post Leaf Others Ratio",
+        post_leaf_conf["others_ratio"],
+        base_meta,
+    )
     write_metric_file(os.path.join(output_dir, "path_granularity.json"), "Path Granularity", path_granularity, base_meta)
     write_metric_file(os.path.join(output_dir, "sibling_coherence.json"), "Sibling Coherence", sibling_coherence, base_meta)
-    write_metric_file(os.path.join(output_dir, "csc_x_nliv_s.json"), "CSCxNLIV-S", csc_x_nliv_s, base_meta)
+    write_metric_file(
+        os.path.join(output_dir, "sibling_separability.json"),
+        "Sibling Separability",
+        sibling_separability,
+        base_meta,
+    )
 
     write_csv(os.path.join(output_dir, "taxonomy_eval_edge_scores.csv"), edge_rows)
     write_csv(os.path.join(output_dir, "taxonomy_eval_path_scores.csv"), path_rows)
     write_csv(os.path.join(output_dir, "path_granularity_details.csv"), path_granularity_rows)
     write_csv(os.path.join(output_dir, "sibling_coherence_details.csv"), sibling_coherence_rows)
+    write_csv(os.path.join(output_dir, "sibling_separability_details.csv"), sibling_separability_rows)
 
     print("Evaluation complete.")
     print(f"Output dir: {output_dir}")

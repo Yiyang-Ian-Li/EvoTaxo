@@ -28,6 +28,20 @@ def _entropy(probs: Sequence[float]) -> float:
     return float(-(arr * np.log(arr)).sum())
 
 
+def _normalized_entropy(probs: Sequence[float]) -> float:
+    if not probs or len(probs) < 2:
+        return float("nan")
+    arr = np.asarray([float(p) for p in probs], dtype=np.float64)
+    total = float(arr.sum())
+    if total <= 0.0:
+        return float("nan")
+    arr = arr / total
+    max_entropy = math.log(len(arr))
+    if max_entropy <= 0.0:
+        return float("nan")
+    return _entropy(arr) / max_entropy
+
+
 def compute_post_leaf_confidence(
     posts: Sequence[str],
     nodes: Dict[str, EvalNode],
@@ -45,9 +59,14 @@ def compute_post_leaf_confidence(
     if not valid_posts or len(candidate_labels) < 2:
         return {
             "mean_entropy": float("nan"),
+            "std_entropy": float("nan"),
             "mean_margin_top1_top2": float("nan"),
+            "std_margin_top1_top2": float("nan"),
+            "others_ratio": float("nan"),
+            "num_posts_predicted_others": 0,
             "num_posts": len(valid_posts),
             "num_leaf_labels": len(leaf_names),
+            "entropy_normalization": "log_num_candidate_labels",
         }
 
     model_kwargs = {}
@@ -62,22 +81,42 @@ def compute_post_leaf_confidence(
 
     entropies: List[float] = []
     margins: List[float] = []
+    num_posts_predicted_others = 0
     for start in tqdm(range(0, len(valid_posts), batch_size), desc="Post Leaf Confidence"):
         batch = valid_posts[start : start + batch_size]
         outputs = clf(batch, candidate_labels, multi_label=False, batch_size=batch_size)
         if isinstance(outputs, dict):
             outputs = [outputs]
         for out in outputs:
+            labels = [str(label) for label in out.get("labels", [])]
             scores = [float(score) for score in out.get("scores", [])]
             if len(scores) < 2:
                 continue
-            entropies.append(_entropy(scores))
-            top2 = sorted(scores, reverse=True)[:2]
+            if labels and labels[0].strip().lower() == "others":
+                num_posts_predicted_others += 1
+            non_other_scores = [
+                score
+                for label, score in zip(labels, scores)
+                if label.strip().lower() != "others"
+            ]
+            if len(non_other_scores) < 2:
+                continue
+            entropies.append(_normalized_entropy(non_other_scores))
+            top2 = sorted(non_other_scores, reverse=True)[:2]
             margins.append(float(top2[0] - top2[1]))
 
     return {
         "mean_entropy": float(np.mean(entropies)) if entropies else float("nan"),
+        "std_entropy": float(np.std(entropies)) if entropies else float("nan"),
         "mean_margin_top1_top2": float(np.mean(margins)) if margins else float("nan"),
+        "std_margin_top1_top2": float(np.std(margins)) if margins else float("nan"),
+        "others_ratio": (
+            float(num_posts_predicted_others / len(valid_posts))
+            if valid_posts
+            else float("nan")
+        ),
+        "num_posts_predicted_others": int(num_posts_predicted_others),
         "num_posts": len(valid_posts),
         "num_leaf_labels": len(leaf_names),
+        "entropy_normalization": "log_num_candidate_labels",
     }
