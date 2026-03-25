@@ -27,7 +27,7 @@ class LLMConfig:
     # Model name for selected provider.
     model: str = "gpt-4o-mini"
     # Optional shared model override for review/final-review/repair stages.
-    later_stage_model: Optional[str] = "gpt-5.1"
+    later_stage_model: Optional[str] = "gpt-4o-mini"
     # HTTP timeout per LLM request (seconds).
     timeout_s: int = 60
     # Sampling temperature for LLM generation.
