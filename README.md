@@ -1,7 +1,7 @@
 # EvoTaxo
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![arXiv](https://arxiv.org/abs/2603.19711)](#)
+[![arXiv](https://img.shields.io/badge/arXiv-1234.56789-b31b1b.svg)](https://arxiv.org/abs/2603.19711)
 
 EvoTaxo is a research codebase for building and evolving taxonomies from temporally ordered social media streams. 
 
